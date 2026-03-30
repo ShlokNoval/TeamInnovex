@@ -29,9 +29,9 @@ export default function MobileStreamPage() {
   // Configure constraints based on quality
   const getConstraints = useCallback((quality: 'low' | 'med' | 'high') => {
     const resolutions = {
-      low: { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 5 } },
-      med: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 10 } },
-      high: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 15 } }
+      low: { width: { ideal: 320 }, height: { ideal: 240 } },
+      med: { width: { ideal: 640 }, height: { ideal: 480 } },
+      high: { width: { ideal: 1280 }, height: { ideal: 720 } }
     }
     return {
       video: {
@@ -75,7 +75,15 @@ export default function MobileStreamPage() {
       }
 
       console.log("[Camera] Requesting getUserMedia with constraints:", getConstraints(quality))
-      const stream = await navigator.mediaDevices.getUserMedia(getConstraints(quality))
+      
+      // Safety timeout: OS camera services can sometimes enter a deadlocked state where getUserMedia hangs forever
+      const stream = await Promise.race([
+        navigator.mediaDevices.getUserMedia(getConstraints(quality)),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error("Camera service timeout. Restart browser.")), 15000)
+        )
+      ]);
+      
       console.log("[Camera] getUserMedia success")
       mediaStreamRef.current = stream
 
@@ -84,7 +92,6 @@ export default function MobileStreamPage() {
         video.srcObject = stream
         
         // Wrap the play execution in a guaranteed timeout fallback
-        // This is strictly for iOS Safari which frequently stalls `play()` promises on MediaStreams
         await new Promise<void>((resolve) => {
           let hasResolved = false
           
@@ -101,10 +108,9 @@ export default function MobileStreamPage() {
             finish()
           }).catch((err) => {
             console.warn("[Camera] Play failed, user may need to tap again:", err)
-            finish() // Still resolve so the UI unlocks, video might just be paused
+            finish()
           })
 
-          // Failsafe: If the promise hangs (Safari bug), force resolve after half a second
           setTimeout(finish, 500)
         })
       }
@@ -173,8 +179,14 @@ export default function MobileStreamPage() {
   }, [streamQuality, rotation, location])
 
   const toggleStream = useCallback(async () => {
+    // STEP 1: Ensure camera is started via user gesture
+    if (!isCameraActive) {
+      await startCamera(streamQuality)
+      return
+    }
+
+    // STEP 2: Now handle streaming
     if (isStreaming) {
-      // Stop streaming
       if (streamIntervalRef.current) clearInterval(streamIntervalRef.current)
       streamIntervalRef.current = null
       setIsStreaming(false)
@@ -183,17 +195,6 @@ export default function MobileStreamPage() {
       setWsStatus('disconnected')
       wsService.disconnect()
     } else {
-      // If camera isn't active yet, start it first (requires user gesture)
-      if (!isCameraActive) {
-        try {
-          await startCamera(streamQuality)
-        } catch (e) {
-          console.error("Camera start failed before streaming", e)
-          return // Abort if camera fails
-        }
-      }
-      
-      // Connect WebSocket
       setWsStatus('connecting')
       try {
         wsService.connect()
@@ -215,7 +216,6 @@ export default function MobileStreamPage() {
         console.warn('WebSocket connection issue:', e)
         setWsStatus('connected') // Still allow streaming loop to run even if WS fails initially
       }
-      
       setIsStreaming(true)
       startStreaming()
     }
@@ -317,8 +317,7 @@ export default function MobileStreamPage() {
           <button
             type="button"
             onClick={handleActivateCamera}
-            onTouchEnd={(e) => { e.preventDefault(); handleActivateCamera(); }}
-            className="flex flex-col items-center gap-6 text-white/40 z-50 p-8 cursor-pointer touch-manipulation active:scale-95 transition-transform relative"
+            className="flex flex-col items-center gap-6 text-white/40 z-[99] p-8 cursor-pointer touch-manipulation active:scale-95 transition-transform relative"
           >
             <div className="w-24 h-24 rounded-full border-2 border-primary/40 flex items-center justify-center bg-primary/5">
               <Camera className="w-12 h-12 text-primary" />
@@ -360,7 +359,7 @@ export default function MobileStreamPage() {
           muted
           disablePictureInPicture
           controls={false}
-          className={`w-full h-full object-cover absolute inset-0 transition-opacity duration-1000 ${isCameraActive ? 'opacity-100' : 'opacity-0'}`}
+          className={`w-full h-full object-cover absolute inset-0 transition-opacity duration-1000 z-10 ${isCameraActive ? 'opacity-100' : 'opacity-0'} pointer-events-none`}
           style={{ WebkitTransform: 'translateZ(0)' } as any}
         />
 
@@ -472,7 +471,6 @@ export default function MobileStreamPage() {
          <button 
             type="button"
             onClick={toggleStream}
-            onTouchEnd={(e) => { e.preventDefault(); toggleStream(); }}
             style={{ 
               WebkitTapHighlightColor: 'transparent',
               WebkitAppearance: 'none',
