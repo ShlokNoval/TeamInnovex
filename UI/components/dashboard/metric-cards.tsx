@@ -9,7 +9,12 @@ export function MetricCards() {
   const [data, setData] = useState<AnalyticsSummary | null>(null)
 
   useEffect(() => {
-    getAnalyticsSummary().then(setData).catch(console.error)
+    const fetchData = () => {
+      getAnalyticsSummary().then(setData).catch(console.error)
+    }
+    fetchData()
+    const interval = setInterval(fetchData, 5000)
+    return () => clearInterval(interval)
   }, [])
 
   if (!data) {

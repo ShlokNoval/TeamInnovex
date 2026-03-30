@@ -16,26 +16,34 @@ export function AlertFeed() {
   const [alerts, setAlerts] = useState<Incident[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Fetch initial alerts
+  // Fetch initial alerts + poll every 5s for updates
   useEffect(() => {
-    getIncidents()
-      .then(data => {
-        // Show only active or recent alerts for the feed
-        const activeAlerts = data.filter(a => a.status !== 'resolved').slice(0, 50)
-        setAlerts(activeAlerts)
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    const fetchAlerts = () => {
+      getIncidents()
+        .then(data => {
+          const activeAlerts = data.filter(a => a.status !== 'resolved').slice(0, 50)
+          setAlerts(activeAlerts)
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false))
+    }
+
+    fetchAlerts()
+    const pollInterval = setInterval(fetchAlerts, 5000)
 
     // Subscribe to real-time new alerts
     wsService.connect()
     
-    // In mock mode, this will return alerts based on the simulation
     const handleNewAlert = (newAlert: Incident) => {
-      setAlerts(prev => [newAlert, ...prev].slice(0, 50))
+      setAlerts(prev => {
+        // Avoid duplicates by checking if this ID is already in the list
+        if (prev.some(a => a.id === newAlert.id)) return prev
+        return [newAlert, ...prev].slice(0, 50)
+      })
       
       // Show toast for critical/high alerts
-      if (newAlert.severity_label === 'critical' || newAlert.severity_label === 'high') {
+      const sev = newAlert.severity_label?.toLowerCase()
+      if (sev === 'critical' || sev === 'high') {
         toast.error(`${newAlert.hazard_type.toUpperCase()} ALERT: ${newAlert.camera?.name || 'Camera'}`, {
           description: `Score: ${newAlert.severity_score} - Needs immediate attention`,
           action: { label: "View", onClick: () => window.location.href = `/dashboard/incidents/${newAlert.id}` }
@@ -46,6 +54,7 @@ export function AlertFeed() {
     wsService.subscribeToAlerts(handleNewAlert)
 
     return () => {
+      clearInterval(pollInterval)
       wsService.unsubscribeFromAlerts()
     }
   }, [])
