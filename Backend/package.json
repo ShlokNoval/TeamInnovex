@@ -1,0 +1,15 @@
+{
+  "name": "divyadrishti-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "socket.io": "^4.8.3",
+    "uuid": "^11.1.0",
+    "ws": "^8.18.0"
+  }
+}

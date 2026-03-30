@@ -1,78 +1,76 @@
 # DivyaDrishti — AI-Powered Road Hazard Detection System
 
-## 🏗️ Monorepo Architecture
-
-This repository is organized into **3 independent modules** to ensure clean separation of concerns and zero merge conflicts between teams.
+## 🏗️ Architecture
 
 ```
 TeamInnovex/
-├── UI/              ← Next.js Frontend (Neural SOC Dashboard)
-├── Backend/         ← FastAPI Python Backend (REST API + WebSocket)
-├── AI_Engine/       ← YOLOv8 AI Detection Engine
-├── README.md
-└── COMMIT.md
+├── UI/              ← Next.js 16 Frontend (Neural SOC Dashboard)
+├── Backend/         ← Node.js Express + Socket.io (Relay Server)
+├── AI_Engine/       ← FastAPI + YOLOv8 Detection Engine
+└── README.md
 ```
 
 ---
 
-## 🚀 Module Overview
+## 🚀 Quick Start (3 Terminals)
 
-### 📱 UI — Neural Command Center
-**Owner**: Shlok | **Stack**: Next.js 16, TypeScript, TailwindCSS, Leaflet
-- Real-time mobile camera uplink via Ngrok tunnel
-- Live AI detection visualization with SOC-grade UI
-- Admin dashboard with incident management & geolocation tracking
-
-**To run:**
-```bash
-cd UI
-npm install
-node mock-backend.mjs   # Terminal 1 (mock relay)
-npm run dev             # Terminal 2 (Next.js)
-ngrok http 3000         # Terminal 3 (mobile tunnel)
-```
-
----
-
-### ⚙️ Backend — FastAPI Server
-**Owner**: Backend Team | **Stack**: Python, FastAPI, SQLite/PostgreSQL
-- REST API for incidents, cameras, and analytics
-- WebSocket relay for real-time AI detections
-- Government reporting endpoints
-
-**To run:**
-```bash
-cd Backend
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
-
----
-
-### 🤖 AI_Engine — YOLOv8 Detection Engine
-**Owner**: AI Team | **Stack**: Python, YOLOv8, OpenCV
-- Real-time hazard detection (potholes, stray animals, accidents)
-- Frame ingestion from mobile camera nodes
-- Confidence scoring and bounding box annotation
-
-**To run:**
+### Terminal 1 — AI Engine (Python)
 ```bash
 cd AI_Engine
 pip install -r requirements.txt
-python main.py
+uvicorn app:app --host 0.0.0.0 --port 8001
+```
+
+### Terminal 2 — Backend Server (Node.js)
+```bash
+cd Backend
+npm install
+node server.js
+```
+
+### Terminal 3 — Frontend (Next.js)
+```bash
+cd UI
+npm install
+npm run dev
+```
+
+### Terminal 4 — Mobile Access (Optional)
+```bash
+ngrok http 3000
 ```
 
 ---
 
-## 🔗 Integration Checklist (Final Merge)
+## 🔗 Port Assignments
 
-When all 3 modules are complete, enable live integration:
+| Service | Port | Purpose |
+|---------|------|---------|
+| Next.js UI | 3000 | SOC Dashboard + Mobile Stream Page |
+| Node.js Backend | 8000 | REST API + Socket.io Relay |
+| AI Engine | 8001 | YOLOv8 Inference + WebSocket |
 
-1. **Start Backend** on port `8000`
-2. **Start AI Engine** (it will connect to the Backend)
-3. In `UI/lib/api.ts` — set `NEXT_PUBLIC_USE_MOCK=false`
-4. In `UI/lib/websocket.ts` — set `USE_MOCK = false`
-5. **Start UI** on port `3000`
+---
+
+## 📱 Usage
+
+1. **Start all 3 services** (Terminals 1-3 above)
+2. Open `http://localhost:3000` on your PC → Landing page
+3. Open `http://localhost:3000/dashboard` → SOC Command Hub
+4. Open `http://localhost:3000/stream` on your phone (via ngrok URL) → Camera uplink
+5. Tap **LINK TO SOC** → Mobile starts streaming frames
+6. Open `http://localhost:3000/testing?mode=live` on PC → Watch AI-annotated live feed
+7. AI detects hazards → Alerts appear in the dashboard in real-time
+
+---
+
+## 🧬 Data Flow
+
+```
+Phone Camera → /stream page → Socket.io raw_frame → Node.js Backend
+  → WebSocket → AI Engine (YOLOv8) → Annotated frame + incidents
+  → Node.js Backend → Socket.io frame_stream + new_alert → SOC Dashboard
+```
 
 ---
 
@@ -81,8 +79,7 @@ When all 3 modules are complete, enable live integration:
 | Branch | Purpose |
 |---|---|
 | `main` | Stable, demo-ready code |
+| `production-v1` | Full integrated build |
 | `ui-core` | Frontend development |
-| `backend-core` | Backend development |
+| `backend-core` | Legacy backend (deprecated) |
 | `ai-analysis-engine` | AI Engine development |
-
-**Final merge order**: All feature branches → `ui-core` → `main`

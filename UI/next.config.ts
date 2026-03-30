@@ -1,21 +1,23 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ['hosea-requisitionary-unawares.ngrok-free.dev'],
+  allowedDevOrigins: ['*'],
   async rewrites() {
     return {
       beforeFiles: [
+        // Proxy REST API calls to the Node.js backend
         {
-          source: '/ws/:path*',
-          destination: 'http://localhost:8000/ws/:path*'
+          source: '/api/:path*',
+          destination: 'http://localhost:8000/api/:path*',
         },
+        // Proxy Socket.io to the Node.js backend
         {
-          source: '/ws',
-          destination: 'http://localhost:8000/ws'
-        }
-      ]
+          source: '/socket.io/:path*',
+          destination: 'http://localhost:8000/socket.io/:path*',
+        },
+      ],
     };
-  }
+  },
 };
 
 export default nextConfig;

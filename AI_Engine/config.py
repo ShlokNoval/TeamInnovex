@@ -38,7 +38,7 @@ SEVERITY_LOW = 33         # 0-33 maps to 'LOW'
 SEVERITY_HIGH = 67        # 67-100 maps to 'HIGH'
 
 # --- BACKEND INTEGRATION CONSTANTS ---
-BACKEND_INCIDENT_URL = os.getenv('BACKEND_URL', 'http://localhost:8001/api/incidents')
+BACKEND_INCIDENT_URL = os.getenv('BACKEND_URL', 'http://localhost:8000/api/incidents')
 
 # Mapping camera_id to actual geographical coordinates for JSON compliance
 CAMERA_REGISTRY = {

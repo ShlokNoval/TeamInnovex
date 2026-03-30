@@ -1,206 +1,161 @@
 import { io, Socket } from 'socket.io-client';
 import { AnnotatedFrameResponse, Incident } from './types';
 
-// Disabled MOCK mode so mobile frames can actually reach the local network relay.
-const USE_MOCK = false;
-
 type AlertCallback = (alert: Incident) => void;
 type FrameCallback = (response: AnnotatedFrameResponse) => void;
+type StatusCallback = (connected: boolean) => void;
 
 class WebSocketService {
   private socket: Socket | null = null;
-  
-  // Use current origin if we are accessed via Ngrok or external IP, otherwise fallback to explicit localhost
-  private getBackendUrl() {
+  private statusCallbacks = new Set<StatusCallback>();
+
+  private getConnectionConfig(): { url: string; options: Record<string, unknown> } {
     if (typeof window !== 'undefined') {
       const hostname = window.location.hostname;
-      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-        return ''; // Socket.io will automatically use the current origin
+      const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+
+      if (isLocal) {
+        const backendUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:8000';
+        return {
+          url: backendUrl,
+          options: { transports: ['websocket', 'polling'] },
+        };
+      } else {
+        // Through ngrok/proxy: connect to current origin, let Next.js rewrites handle routing
+        return {
+          url: '',
+          options: { transports: ['websocket', 'polling'] },
+        };
       }
     }
-    return process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:8000';
+    return { url: 'http://localhost:8000', options: { transports: ['websocket', 'polling'] } };
   }
 
-  // Mock simulation state
-  private mockInterval: NodeJS.Timeout | null = null;
-  private mockAlertInterval: NodeJS.Timeout | null = null;
+  /** Subscribe to real-time WebSocket connection status updates */
+  onStatusChange(cb: StatusCallback): () => void {
+    this.statusCallbacks.add(cb);
+    return () => { this.statusCallbacks.delete(cb); };
+  }
+
+  private notifyStatus(connected: boolean) {
+    this.statusCallbacks.forEach((cb) => cb(connected));
+  }
 
   connect() {
-    if (USE_MOCK) return;
+    if (this.socket?.connected) return;
 
-    if (!this.socket) {
-      this.socket = io(this.getBackendUrl(), {
-        path: '/ws',
-        autoConnect: true,
-      });
-
-      this.socket.on('connect', () => console.log('WebSocket connected'));
-      this.socket.on('disconnect', () => console.log('WebSocket disconnected'));
-    }
-  }
-
-  disconnect() {
-    if (USE_MOCK) {
-      this.stopMockSimulation();
-      return;
-    }
-    
+    // Clean up any stale socket
     if (this.socket) {
+      this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
     }
+
+    const config = this.getConnectionConfig();
+    console.log(`[WS] Connecting to "${config.url || 'current origin'}"...`);
+
+    this.socket = io(config.url || undefined, {
+      path: '/socket.io',
+      autoConnect: true,
+      transports: config.options.transports as ('websocket' | 'polling')[],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1500,
+      timeout: 10000,
+    });
+
+    this.socket.on('connect', () => {
+      console.log('[WS] Connected. SID:', this.socket?.id);
+      this.notifyStatus(true);
+    });
+
+    this.socket.on('disconnect', (reason) => {
+      console.log('[WS] Disconnected:', reason);
+      this.notifyStatus(false);
+    });
+
+    this.socket.on('connect_error', (err) => {
+      if (err.message !== 'xhr poll error') {
+        console.error('[WS] Connection error:', err.message);
+      }
+      this.notifyStatus(false);
+    });
   }
 
-  private httpPollInterval: NodeJS.Timeout | null = null;
-  private frameCallbacks = new Set<FrameCallback>();
+  disconnect() {
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+      this.socket = null;
+    }
+    this.notifyStatus(false);
+  }
 
-  // Testing Dashboard - Send raw frame, receive annotated frame
+  isConnected(): boolean {
+    return this.socket?.connected ?? false;
+  }
+
+  // ─── Frame Streaming ──────────────────────────────────────────────────────
+
   subscribeToFrames(onFrame: FrameCallback) {
-    if (USE_MOCK) {
-      this.startMockFrameSimulation(onFrame);
-      return;
-    }
+    if (!this.socket) this.connect();
+    this.socket?.on('frame_stream', (data: AnnotatedFrameResponse) => {
+      onFrame(data);
+    });
+  }
 
-    this.frameCallbacks.add(onFrame);
-
-    if (!this.httpPollInterval) {
-      this.httpPollInterval = setInterval(async () => {
-        try {
-          const res = await fetch('/api/stream', { cache: 'no-store' });
-          const data = await res.json();
-          if (data.annotatedFrame) {
-            this.frameCallbacks.forEach(cb => cb(data));
-          }
-        } catch (err) {
-          // silent fail
-        }
-      }, 80); // Increased to ~12.5 FPS for smoother playback
+  unsubscribeFromFrames(onFrame?: FrameCallback) {
+    if (onFrame) {
+      this.socket?.off('frame_stream', onFrame);
+    } else {
+      this.socket?.off('frame_stream');
     }
   }
 
-  unsubscribeFromFrames(onFrame: FrameCallback) {
-    if (USE_MOCK) {
-      if (this.mockInterval) clearInterval(this.mockInterval);
-      return;
-    }
-    this.frameCallbacks.delete(onFrame);
-    if (this.frameCallbacks.size === 0 && this.httpPollInterval) {
-      clearInterval(this.httpPollInterval);
-      this.httpPollInterval = null;
+  private isSendingFrame = false;
+
+  async sendFrame(base64Frame: string, timestamp: number, location?: { lat: number; lng: number }) {
+    if (this.isSendingFrame) return;
+
+    this.isSendingFrame = true;
+    try {
+      if (!this.socket?.connected) {
+        this.connect();
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      if (this.socket?.connected) {
+        this.socket.emit('raw_frame', { frame: base64Frame, timestamp, location });
+      }
+    } catch (e) {
+      console.error('[WS] sendFrame error:', e);
+    } finally {
+      this.isSendingFrame = false;
     }
   }
 
-  sendFrame(base64Frame: string, timestamp: number, location?: { lat: number, lng: number }) {
-    if (USE_MOCK) return; 
-    
-    // Send standard HTTP payload with optional location metadata
-    fetch('/api/stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        frame: base64Frame, 
-        timestamp,
-        location 
-      })
-    }).catch(e => console.error("Send failed", e));
-  }
+  // ─── Alert Subscription ───────────────────────────────────────────────────
 
-  private httpAlertPollInterval: NodeJS.Timeout | null = null;
   private processedAlertIds = new Set<string>();
 
-  // Admin Dashboard - Receive new alerts
   subscribeToAlerts(onAlert: AlertCallback) {
-    if (USE_MOCK) {
-       // Currently hardcoded to false, but keeping structure
-      this.startMockAlertSimulation(onAlert);
-      return;
-    }
-
-    if (this.httpAlertPollInterval) clearInterval(this.httpAlertPollInterval);
-    this.httpAlertPollInterval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/stream');
-        const data = await res.json();
-        if (data.newAlerts && data.newAlerts.length > 0) {
-          data.newAlerts.forEach((alert: any) => {
-             if (!this.processedAlertIds.has(alert.id)) {
-                this.processedAlertIds.add(alert.id);
-                onAlert(alert);
-             }
-          });
-          // Keep set from growing infinitely
-          if (this.processedAlertIds.size > 100) {
-             const iterator = this.processedAlertIds.values();
-             for(let i=0; i<20; i++) this.processedAlertIds.delete(iterator.next().value!);
-          }
-        }
-      } catch (err) {
-        // silent fail on poll
+    if (!this.socket) this.connect();
+    this.socket?.on('new_alert', (alert: Incident) => {
+      if (!this.processedAlertIds.has(alert.id)) {
+        this.processedAlertIds.add(alert.id);
+        onAlert(alert);
       }
-    }, 1000); // Admin polls every 1 second
+      // Keep set from growing infinitely
+      if (this.processedAlertIds.size > 200) {
+        const iterator = this.processedAlertIds.values();
+        for (let i = 0; i < 50; i++) this.processedAlertIds.delete(iterator.next().value!);
+      }
+    });
   }
 
   unsubscribeFromAlerts() {
-    if (USE_MOCK) {
-      if (this.mockAlertInterval) clearInterval(this.mockAlertInterval);
-      return;
-    }
-    if (this.httpAlertPollInterval) clearInterval(this.httpAlertPollInterval);
-  }
-
-  // Mock simulation logic
-  private startMockFrameSimulation(onFrame: FrameCallback) {
-    if (this.mockInterval) clearInterval(this.mockInterval);
-    
-    let ts = 0;
-    this.mockInterval = setInterval(() => {
-      ts += 0.5;
-      
-      // Every few frames, simulate a detection
-      const hasDetection = Math.random() > 0.7;
-      const detections = [];
-      
-      if (hasDetection) {
-        const types = ['pothole', 'animal', 'accident'];
-        const type = types[Math.floor(Math.random() * types.length)];
-        const severities = ['low', 'medium', 'high', 'critical'] as const;
-        detections.push({
-          bbox: [50, 50, 100, 100] as [number, number, number, number],
-          class: type,
-          confidence: 0.7 + (Math.random() * 0.25),
-          severity: severities[Math.floor(Math.random() * severities.length)]
-        });
-      }
-
-      onFrame({
-        annotatedFrame: "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==", // 1x1 transparent
-        detections,
-        timestamp: ts
-      });
-    }, 1000); // 1 mock frame per second
-  }
-
-  private startMockAlertSimulation(onAlert: AlertCallback) {
-    if (this.mockAlertInterval) clearInterval(this.mockAlertInterval);
-    
-    // Simulate a random critical alert every 30-60 seconds
-    this.mockAlertInterval = setInterval(() => {
-      import('./mock-data').then(({ MOCK_INCIDENTS }) => {
-        const idx = Math.floor(Math.random() * MOCK_INCIDENTS.length);
-        const randomIncident = JSON.parse(JSON.stringify(MOCK_INCIDENTS[idx]));
-        randomIncident.id = `inc-mock-${Date.now()}`;
-        randomIncident.created_at = new Date().toISOString();
-        randomIncident.status = 'new';
-        onAlert(randomIncident);
-      });
-    }, 45000);
-  }
-
-  private stopMockSimulation() {
-    if (this.mockInterval) clearInterval(this.mockInterval);
-    if (this.mockAlertInterval) clearInterval(this.mockAlertInterval);
+    this.socket?.off('new_alert');
   }
 }
 
-// Export singleton instance
+// Singleton export
 export const wsService = new WebSocketService();

@@ -1,26 +1,17 @@
-# Backend Module
+# DivyaDrishti Backend — Node.js + Socket.io
 
-This folder contains the **FastAPI Backend Server** for DivyaDrishti.
-
-## Responsibilities
-- REST API endpoints for incidents, cameras, analytics
-- WebSocket relay to stream AI detections to the UI
-- Database management (SQLite for dev, PostgreSQL for prod)
-- Government reporting/notification hooks
-
-## Setup
+## Quick Start
 ```bash
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+npm install
+node server.js
 ```
 
-## Integration with UI
-The UI module (`../UI`) expects:
-- `POST /api/incidents` — Report new hazards
-- `GET /api/incidents` — Fetch incident list
-- `PATCH /api/alerts/{id}` — Update incident status
-- `GET /api/cameras` — List active camera nodes
-- `GET /api/analytics/summary` — Dashboard metrics
-- WebSocket at `/ws` path for real-time frame streaming
+## Architecture
+- **Port**: 8000
+- **Socket.io**: Receives `raw_frame` from mobile, broadcasts `frame_stream` and `new_alert` to dashboards
+- **REST API**: `/api/incidents`, `/api/cameras`, `/api/analytics/summary`, `/api/analytics/heatmap`
+- **AI Bridge**: Forwards frames to the Python AI Engine at `ws://localhost:8001` via native WebSocket
 
-See `../UI/lib/api.ts` for the full contract.
+## Environment Variables
+- `PORT` — Server port (default: 8000)
+- `AI_ENGINE_WS` — AI Engine WebSocket URL (default: `ws://localhost:8001/ws/stream/mobile`)
