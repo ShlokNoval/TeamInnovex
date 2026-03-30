@@ -16,7 +16,7 @@ export function VideoPlayer({ file }: VideoPlayerProps) {
   
   const frameCountRef = useRef(0)
   const lastTimeRef = useRef(Date.now())
-  const requestRef = useRef<number>(0)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   
   useEffect(() => {
     let objectUrl: string | null = null
@@ -24,16 +24,24 @@ export function VideoPlayer({ file }: VideoPlayerProps) {
     if (file) {
       objectUrl = URL.createObjectURL(file)
       if (videoRef.current) {
-        videoRef.current.src = objectUrl
-        videoRef.current.play().catch(e => console.error("Autoplay failed", e))
+        const video = videoRef.current
+        video.src = objectUrl
+        video.load()
+        const playPromise = video.play()
+        
+        if (playPromise !== undefined) {
+          playPromise.catch(e => {
+            if (e.name !== 'AbortError') {
+              console.warn("Autoplay skipped or failed:", e)
+            }
+          })
+        }
       }
     }
     
     // Connect WebSocket
     wsService.connect()
     const handleFrame = (response: AnnotatedFrameResponse) => {
-      // In a real app, we'd overlay this on the canvas. 
-      // For the mock, the backend sends back the annotated frame as base64.
       setAnnotatedFrame(response.annotatedFrame)
       
       // Calculate FPS
@@ -51,52 +59,65 @@ export function VideoPlayer({ file }: VideoPlayerProps) {
     return () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl)
       wsService.unsubscribeFromFrames(handleFrame)
-      if (requestRef.current) cancelAnimationFrame(requestRef.current)
+      if (intervalRef.current) clearInterval(intervalRef.current)
     }
   }, [file])
 
-  // Process frames loop (extracts frame and sends to WS)
-  const processFrame = () => {
-    if (!videoRef.current || !canvasRef.current || videoRef.current.paused || videoRef.current.ended) {
-      return
-    }
-
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext("2d")
-    
-    if (ctx) {
-      // Match canvas size to video size
-      if (canvas.width !== video.videoWidth && video.videoWidth > 0) {
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
-      }
-
-      // Draw current video frame to hidden canvas
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-      
-      // Only process every ~5th frame for performance (approx 6 FPS)
-      if (frameCountRef.current % 5 === 0) {
-        // Convert to Base64 - Optimized for throughput over the tunnel
-        const base64 = canvas.toDataURL('image/jpeg', 0.4) // Reduced from 0.6 to 0.4 for speed
-        
-        // Send via WebSocket
-        wsService.sendFrame(base64, video.currentTime)
-      }
-    }
-
-    setCurrentTime(video.currentTime)
-    requestRef.current = requestAnimationFrame(processFrame)
-  }
-
   useEffect(() => {
     if (isPlaying) {
-      requestRef.current = requestAnimationFrame(processFrame)
-    } else if (requestRef.current) {
-      cancelAnimationFrame(requestRef.current)
+      // Use setInterval at 500ms (~2 FPS) instead of requestAnimationFrame (60 FPS).
+      // This is the single biggest performance win — we only need to send a couple
+      // of frames per second to the AI engine; running at 60fps just thrashes the
+      // CPU with canvas draws and floods React with state updates.
+      intervalRef.current = setInterval(() => {
+        if (!videoRef.current || !canvasRef.current || videoRef.current.paused || videoRef.current.ended) {
+          return
+        }
+
+        const video = videoRef.current
+        const canvas = canvasRef.current
+        const ctx = canvas.getContext("2d")
+    
+        if (ctx) {
+          const MAX_WIDTH = 480;
+          let targetWidth = video.videoWidth;
+          let targetHeight = video.videoHeight;
+          if (targetWidth > MAX_WIDTH) {
+            targetHeight = Math.floor(targetHeight * (MAX_WIDTH / targetWidth));
+            targetWidth = MAX_WIDTH;
+          }
+
+          if (canvas.width !== targetWidth && targetWidth > 0) {
+            canvas.width = targetWidth
+            canvas.height = targetHeight
+          }
+
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      
+          try {
+            const base64 = canvas.toDataURL('image/jpeg', 0.35)
+          
+            if (base64.length < 100) {
+              console.warn("Canvas failed to export image! Is the video cross-origin?")
+            } else {
+              wsService.sendFrame(base64, video.currentTime)
+            }
+          } catch (err) {
+            console.warn("CORS/Tainted Canvas Error:", err);
+          }
+        }
+
+        setCurrentTime(video.currentTime)
+      }, 500)
+    } else if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
     }
     return () => {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current)
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
     }
   }, [isPlaying])
 
@@ -108,7 +129,6 @@ export function VideoPlayer({ file }: VideoPlayerProps) {
         className="hidden"
         controls
         muted
-        loop
         playsInline
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}

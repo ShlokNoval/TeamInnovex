@@ -62,6 +62,11 @@ class AccidentEngine:
         prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
         curr_gray = cv2.cvtColor(curr_frame, cv2.COLOR_BGR2GRAY)
 
+        if prev_gray.shape != curr_gray.shape:
+            # Different resolutions or orientations—reset state
+            self.flow_history[camera_id] = []
+            return 0.0
+
         flow = cv2.calcOpticalFlowFarneback(
             prev_gray, curr_gray, None,
             pyr_scale=0.5, levels=3, winsize=15,

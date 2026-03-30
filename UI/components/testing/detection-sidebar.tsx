@@ -5,6 +5,8 @@ import { HazardIcon } from "@/components/shared/hazard-icon"
 import { wsService } from "@/lib/websocket"
 import { Detection } from "@/lib/types"
 import { getSeverityColor } from "@/lib/utils"
+// Internal singleton cooldown block outside component to track globals
+const cooldownTracker: Record<string, number> = {}
 
 export function DetectionSidebar() {
   const [detections, setDetections] = useState<Detection[]>([])
@@ -13,15 +15,29 @@ export function DetectionSidebar() {
   useEffect(() => {
     const handleFrame = (response: any) => {
       if (response.detections && response.detections.length > 0) {
+        
+        // Filter out identical redundant events pushed natively by consecutive frames
+        const now = Date.now();
+        const validDetections = response.detections.filter((d: any) => {
+           const key = d.class;
+           if (!cooldownTracker[key] || now - cooldownTracker[key] > 5000) {
+               cooldownTracker[key] = now;
+               return true;
+           }
+           return false;
+        });
+
+        if (validDetections.length === 0) return;
+
         setDetections(prev => {
-          const updated = [...response.detections, ...prev].slice(0, 50) // Keep last 50
+          const updated = [...validDetections, ...prev].slice(0, 50) // Keep last 50
           return updated
         })
 
         // Update counts
         setCounts(prev => {
           const newCounts = { ...prev }
-          response.detections.forEach((d: any) => {
+          validDetections.forEach((d: any) => {
             if (newCounts[d.class as keyof typeof newCounts] !== undefined) {
               newCounts[d.class as keyof typeof newCounts]++
             }

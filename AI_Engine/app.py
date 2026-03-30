@@ -50,43 +50,53 @@ async def websocket_stream(websocket: WebSocket, camera_id: str):
     print(f"WebSocket connected for {camera_id}")
     try:
         while True:
-            data = await websocket.receive_json()
-            # Expecting fields: frame (base64_jpeg), timestamp (float)
-            frame_data = base64.b64decode(data['frame'])
-            
-            # Decode frame to numpy array
-            nparr = np.frombuffer(frame_data, np.uint8)
-            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            
-            if frame is None:
-                continue
+            try:
+                data = await websocket.receive_json()
+                print(f"Received frame from JS at timestamp: {data.get('timestamp')}")
+                # Expecting fields: frame (base64_jpeg), timestamp (float)
+                
+                # Fix javascript base64 padding issues
+                b64_str = data['frame']
+                b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
+                
+                frame_data = base64.b64decode(b64_str)
+                
+                # Decode frame to numpy array
+                nparr = np.frombuffer(frame_data, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                
+                if frame is None:
+                    continue
 
-            # Run unifying AI pipeline
-            annotated_frame, all_incidents = pipeline.process_frame(frame, camera_id)
-            
-            # Format image to base64
-            annotated_b64 = pipeline.detector.frame_to_base64(annotated_frame)
-            
-            # Route immediately to backend if any hazard triggers are set to HIGH
-            for inc in all_incidents:
-                if inc['severity'] == 'HIGH':
-                    backend_payload = {
-                        "type": inc['type'],
-                        "camera_id": inc['camera_id'],
-                        "frame_index": inc['frame'],
-                        "severity": "HIGH",
-                        "metadata": inc['data']
-                    }
-                    asyncio.create_task(send_incident_to_backend(backend_payload))
-            
-            output_payload = {
-                "annotated_frame": annotated_b64,
-                "incidents_count": len(all_incidents),
-                "incidents": all_incidents
-            }
-            
-            await websocket.send_json(output_payload)
-            
+                # Run unifying AI pipeline
+                annotated_frame, all_incidents = pipeline.process_frame(frame, camera_id)
+                
+                # Format image to base64
+                annotated_b64 = pipeline.detector.frame_to_base64(annotated_frame)
+                
+                # Route immediately to backend if any hazard triggers are set to HIGH
+                for inc in all_incidents:
+                    if inc['severity'] == 'HIGH':
+                        backend_payload = {
+                            "type": inc['type'],
+                            "camera_id": inc['camera_id'],
+                            "frame_index": inc['frame'],
+                            "severity": "HIGH",
+                            "metadata": inc['data']
+                        }
+                        asyncio.create_task(send_incident_to_backend(backend_payload))
+                
+                output_payload = {
+                    "annotated_frame": annotated_b64,
+                    "incidents_count": len(all_incidents),
+                    "incidents": all_incidents
+                }
+                
+                await websocket.send_json(output_payload)
+            except Exception as e:
+                print(f"Frame processing error: {e}")
+                continue
+                
     except WebSocketDisconnect:
         print(f"WebSocket disconnected for {camera_id}")
 

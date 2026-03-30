@@ -1,22 +1,38 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ['*'],
+  allowedDevOrigins: [
+    'hosea-requisitionary-unawares.ngrok-free.dev',
+    '*.ngrok-free.app',
+    '*.trycloudflare.com',
+    '*.loca.lt'
+  ],
   async rewrites() {
     return {
       beforeFiles: [
-        // Proxy REST API calls to the Node.js backend
         {
           source: '/api/:path*',
           destination: 'http://localhost:8000/api/:path*',
         },
-        // Proxy Socket.io to the Node.js backend
         {
           source: '/socket.io/:path*',
           destination: 'http://localhost:8000/socket.io/:path*',
         },
       ],
     };
+  },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'ngrok-skip-browser-warning',
+            value: 'true',
+          },
+        ],
+      },
+    ];
   },
 };
 

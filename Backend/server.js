@@ -238,14 +238,26 @@ io.on('connection', (socket) => {
     if (aiResponse && aiResponse.incidents && aiResponse.incidents.length > 0) {
       for (const aiInc of aiResponse.incidents) {
         const incident = mapAIIncidentToUIIncident(aiInc, location);
-        incidents.unshift(incident); // Add to front
+        
+        // --- COOLDOWN DEDUPLICATION logic ---
+        // Prevent spamming 50 identical alerts if physical crash persists across frames
+        const cooldownKey = `${incident.camera_id}_${incident.hazard_type}`;
+        const lastTime = global.incidentCooldowns ? global.incidentCooldowns[cooldownKey] : 0;
+        
+        if (!global.incidentCooldowns) global.incidentCooldowns = {};
+        
+        if (Date.now() - lastTime > 10000) { // 10 second physical cooldown 
+          global.incidentCooldowns[cooldownKey] = Date.now();
+          
+          incidents.unshift(incident); // Add to front
 
-        // Keep incidents list manageable
-        if (incidents.length > 500) incidents.length = 500;
+          // Keep incidents list manageable
+          if (incidents.length > 500) incidents.length = 500;
 
-        // Broadcast new alert to dashboards
-        io.emit('new_alert', incident);
-        console.log(`[Alert] ${incident.hazard_type.toUpperCase()} | Severity: ${incident.severity_label} | Score: ${incident.severity_score}`);
+          // Broadcast new alert to dashboards
+          io.emit('new_alert', incident);
+          console.log(`[Alert] ${incident.hazard_type.toUpperCase()} | Severity: ${incident.severity_label} | Score: ${incident.severity_score}`);
+        }
       }
     }
   });
