@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.db
+*.pyc
+.env
+trace.txt
+out2.txt
