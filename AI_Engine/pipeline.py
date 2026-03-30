@@ -55,10 +55,19 @@ class AIPipeline:
             det['velocity_px'] = velocity_px
             # Ensure class mapping covers both conventions
             
-            # --- HACKATHON DEMO POTHOLE ALIAS ---
-            # yolov8n.pt has no "pothole" class. Any low-confidence detection sitting
-            # in the lower 70% of the frame (road surface) is re-labelled as pothole.
-            if det['confidence'] < 0.26:
+            # --- MOTION-AWARE POTHOLE ALIAS ---
+            # yolov8n.pt has no native pothole class. We alias stationary, low-confidence
+            # objects in the lower road zone as potholes.
+            # CRITICAL: Never alias known vehicle/person/animal classes — even at low 
+            # confidence, YOLO's class prediction is usually correct for these.
+            VEHICLE_CLASSES = {'car', 'truck', 'motorcycle', 'bus', 'bicycle', 'train', 'boat'}
+            PERSON_CLASSES = {'person'}
+            ANIMAL_CLASSES = {'dog', 'cat', 'cow', 'horse', 'sheep', 'bird', 'bear', 'elephant', 'zebra', 'giraffe'}
+            EXCLUDE_FROM_ALIAS = VEHICLE_CLASSES | PERSON_CLASSES | ANIMAL_CLASSES
+            
+            if (det['confidence'] < 0.26 
+                and det['velocity_px'] < 1.5
+                and det['class_name'] not in EXCLUDE_FROM_ALIAS):
                 x, y, w, h = det['bbox']
                 if y > img_h * 0.3:
                     det['class_name'] = 'pothole'
