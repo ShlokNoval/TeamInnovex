@@ -1,0 +1,7 @@
+﻿app/dashboard/layout.tsx(71,29): error TS2322: Type '{ children: Element; asChild: true; }' is not assignable to type 'IntrinsicAttributes & Props<unknown>'.
+  Property 'asChild' does not exist on type 'IntrinsicAttributes & Props<unknown>'.
+app/dashboard/layout.tsx(106,36): error TS2322: Type '{ children: Element; asChild: true; }' is not assignable to type 'IntrinsicAttributes & Props<unknown>'.
+  Property 'asChild' does not exist on type 'IntrinsicAttributes & Props<unknown>'.
+app/dashboard/layout.tsx(114,65): error TS2322: Type '{ children: Element[]; className: string; align: "end"; forceMount: true; }' is not assignable to type 'IntrinsicAttributes & MenuPopupProps & Pick<MenuPositionerProps, "align" | "alignOffset" | "side" | "sideOffset">'.
+  Property 'forceMount' does not exist on type 'IntrinsicAttributes & MenuPopupProps & Pick<MenuPositionerProps, "align" | "alignOffset" | "side" | "sideOffset">'.
+components/testing/video-player.tsx(19,22): error TS2554: Expected 1 arguments, but got 0.

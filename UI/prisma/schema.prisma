@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Camera {
+  id            String     @id @default(uuid())
+  name          String
+  location_name String
+  latitude      Float
+  longitude     Float
+  rtsp_url      String?
+  active        Boolean    @default(true)
+  incidents     Incident[]
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+}
+
+model Incident {
+  id             String             @id @default(uuid())
+  camera_id      String
+  camera         Camera             @relation(fields: [camera_id], references: [id])
+  hazard_type    String             // "pothole" | "animal" | "accident"
+  severity_label String             // "low" | "medium" | "high" | "critical"
+  severity_score Float
+  confidence     Float
+  status         String             @default("new") // "new" | "acknowledged" | "resolved"
+  latitude       Float?
+  longitude      Float?
+  metadata       Json?              // Additional type-specific data
+  snapshots      IncidentSnapshot[]
+  history        IncidentHistory[]
+  created_at     DateTime           @default(now())
+  updated_at     DateTime           @updatedAt
+}
+
+model IncidentSnapshot {
+  id          String   @id @default(uuid())
+  incident_id String
+  incident    Incident @relation(fields: [incident_id], references: [id], onDelete: Cascade)
+  image_url   String   // Can be base64 string or actual URL/path
+  frame_time  Float?
+  frame_type  String   // "before" | "after" | "detection"
+  created_at  DateTime @default(now())
+}
+
+model IncidentHistory {
+  id          String   @id @default(uuid())
+  incident_id String
+  incident    Incident @relation(fields: [incident_id], references: [id], onDelete: Cascade)
+  event_type  String   // "status_change", "severity_update", etc.
+  notes       String?
+  event_time  DateTime @default(now())
+}
+
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  role          String   // "admin", "viewer"
+  password_hash String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}
