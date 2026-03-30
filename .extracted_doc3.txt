@@ -1,0 +1,94 @@
+AI-Based Road Hazard Detection System
+System Architecture & Workflow Guide
+1. Overview
+•
+Single source of truth for Backend, AI, and Frontend teams
+•
+Defines architecture, data flow, APIs, frontend structure, and AI guidelines
+2. System Architecture
+Testing Dashboard (Frontend 1): Upload videos/images, sends frames via WebSocket,
+displays output.
+Backend + AI Engine: FastAPI + YOLOv8, processes frames, detects hazards, stores data.
+Admin Panel (Frontend 2): Real-time alerts and analytics for authorities.
+3. End-to-End Workflow
+•
+User uploads video
+•
+Frames extracted and sent via WebSocket
+•
+AI processes frames using YOLOv8
+•
+Severity and risk calculated
+•
+Frames annotated with OpenCV
+•
+Processed frames returned
+•
+Alerts triggered if severity high
+•
+Admin panel updates in real-time
+4. Data Flow & Contracts
+Frontend → Backend
+{ "frame": "base64String", "timestamp": 1.5 }
+Backend → Testing Dashboard
+{ "annotatedFrame": "base64...", "detections": [...], "timestamp": 1.5 }
+Backend → Admin Panel
+{ "id": "uuid", "type": "pothole", "severity": "HIGH", "severity_score": 85, "thumbnail": "base64..." 
+REST API Endpoints
+Method
+Endpoint
+Purpose
+POST
+/api/upload
+Upload file
+GET
+/api/alerts
+Fetch alerts
+GET
+/api/alerts/:id
+Alert details
+PATCH
+/api/alerts/:id
+Update status
+GET
+/api/analytics/summary
+Stats
+GET
+/api/analytics/heatmap
+Map data
+5. Frontend Structure
+•
+Next.js 14+
+•
+Tailwind CSS
+•
+shadcn/ui
+Pages & Routes
+•
+/
+•
+/dashboard
+•
+/upload
+•
+/incidents
+•
+/incidents/[id]
+•
+/cameras
+•
+/analytics
+•
+/settings
+6. AI & Backend Guidelines
+Suggested Prompt:
+Use Python 3.11, FastAPI, OpenCV, YOLOv8, SQLite → PostgreSQL. Follow strict contracts. Avoid extra l
+Core Rules
+•
+Follow data contracts strictly
+•
+Keep dependencies minimal
+•
+Maintain DB consistency
+•
+Enable WebSocket CORS for localhost:3000
