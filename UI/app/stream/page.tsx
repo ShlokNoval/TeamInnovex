@@ -153,14 +153,14 @@ export default function MobileStreamPage() {
   }, [streamQuality, rotation])
 
   return (
-    <div className="min-h-screen bg-black text-white p-4 font-mono flex flex-col items-center justify-between">
+    <div className="min-h-[100dvh] h-[100dvh] overflow-hidden bg-black text-white p-4 font-mono flex flex-col items-center justify-between relative">
       {/* Upper Status Bar */}
-      <div className="w-full flex justify-between items-center z-20 bg-black/40 backdrop-blur-lg p-3 rounded-2xl border border-white/5">
+      <div className="w-full flex justify-between items-center z-50 bg-black/40 backdrop-blur-lg p-3 rounded-2xl border border-white/5 relative">
         <div className="flex items-center gap-2">
           <div className={`w-3 h-3 rounded-full ${isStreaming ? 'bg-primary animate-ping' : 'bg-white/20'}`} />
           <span className="text-[10px] font-bold tracking-widest">{isStreaming ? "STREAMING" : "STANDBY"}</span>
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-4 pointer-events-none">
            {location && (
              <div className="flex flex-col items-end mr-2">
                 <span className="text-[8px] text-white/30 uppercase tracking-widest text-primary">GPS ACTIVE</span>
@@ -181,7 +181,7 @@ export default function MobileStreamPage() {
       </div>
 
       {/* Main Viewfinder */}
-      <div className="flex-1 w-full my-4 relative rounded-3xl overflow-hidden border border-white/10 shadow-[0_0_50px_rgba(var(--primary-rgb),0.05)] flex items-center justify-center bg-zinc-950">
+      <div className="flex-1 w-full my-4 relative rounded-3xl overflow-hidden border border-white/10 shadow-[0_0_50px_rgba(var(--primary-rgb),0.05)] flex items-center justify-center bg-zinc-950 z-10 pointer-events-none">
         {!isCameraActive && !cameraError && (
           <div className="flex flex-col items-center gap-4 text-white/20 animate-pulse">
             <Camera className="w-20 h-20" />
@@ -190,7 +190,7 @@ export default function MobileStreamPage() {
         )}
         
         {cameraError && (
-          <div className="flex flex-col items-center gap-4 text-red-500 z-30 p-6 text-center">
+          <div className="flex flex-col items-center gap-4 text-red-500 z-50 p-6 text-center pointer-events-auto">
             <ShieldCheck className="w-16 h-16 opacity-50 mb-2" />
             <p className="text-xs font-bold font-sans">{cameraError}</p>
             <Button onClick={startCamera} variant="outline" className="border-red-500/30 text-red-500 hover:bg-red-500/10 mt-2 font-black tracking-widest text-xs h-10 px-8">
@@ -199,12 +199,13 @@ export default function MobileStreamPage() {
           </div>
         )}
 
+        {/* Video remains pointer-events-none implicitly since container is, but let's make sure it doesn't block touches */}
         <video 
           ref={videoRef} 
           autoPlay 
           playsInline
           muted
-          className={`w-full h-full object-cover absolute inset-0 transition-opacity duration-1000 ${isCameraActive ? 'opacity-100' : 'opacity-0'}`}
+          className={`w-full h-full object-cover absolute inset-0 transition-opacity duration-1000 ${isCameraActive ? 'opacity-100' : 'opacity-0'} pointer-events-none`}
         />
 
         {/* HUD Overlays */}
@@ -212,10 +213,10 @@ export default function MobileStreamPage() {
           {isStreaming && (
             <>
               {/* Corner Brackets */}
-              <div className="absolute top-6 left-6 w-12 h-12 border-t-2 border-l-2 border-primary z-10" />
-              <div className="absolute top-6 right-6 w-12 h-12 border-t-2 border-r-2 border-primary z-10" />
-              <div className="absolute bottom-110 left-6 w-12 h-12 border-b-2 border-l-2 border-primary z-10" />
-              <div className="absolute bottom-110 right-6 w-12 h-12 border-b-2 border-r-2 border-primary z-10" />
+              <div className="absolute top-6 left-6 w-12 h-12 border-t-2 border-l-2 border-primary z-20 pointer-events-none" />
+              <div className="absolute top-6 right-6 w-12 h-12 border-t-2 border-r-2 border-primary z-20 pointer-events-none" />
+              <div className="absolute bottom-6 left-6 w-12 h-12 border-b-2 border-l-2 border-primary z-20 pointer-events-none" />
+              <div className="absolute bottom-6 right-6 w-12 h-12 border-b-2 border-r-2 border-primary z-20 pointer-events-none" />
               
               {/* Scanning Scanline */}
               <motion.div 
@@ -226,7 +227,7 @@ export default function MobileStreamPage() {
               />
 
               {/* Rec Indicator */}
-              <div className="absolute top-10 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-1.5 bg-red-600/20 border border-red-500/40 rounded-full text-[10px] font-black tracking-widest text-red-500 uppercase animate-pulse">
+              <div className="absolute top-10 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-1.5 bg-red-600/20 border border-red-500/40 rounded-full text-[10px] font-black tracking-widest text-red-500 uppercase animate-pulse z-20 pointer-events-none">
                 <div className="w-2 h-2 rounded-full bg-red-600 shadow-[0_0_10px_red]" />
                 Neural Node Link
               </div>
@@ -236,7 +237,7 @@ export default function MobileStreamPage() {
       </div>
 
       {/* Control Panel */}
-      <div className="w-full bg-zinc-900 rounded-[32px] p-6 space-y-6 border border-white/5 shadow-2xl">
+      <div className="w-full bg-zinc-900 rounded-[32px] p-6 space-y-6 border border-white/5 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-50 relative pb-8">
          <div className="flex justify-between items-center border-b border-white/5 pb-6">
             <div className="space-y-1">
                <h2 className="text-lg font-black tracking-tighter">NODE_0842</h2>
@@ -283,22 +284,24 @@ export default function MobileStreamPage() {
             </div>
          </div>
 
-         <Button 
+         {/* Native button for reliable mobile touch, high z-index */}
+         <button 
             onClick={toggleStream}
-            className={`w-full h-20 rounded-[28px] text-xl font-black transition-all active:scale-95 ${isStreaming ? 'bg-red-600 hover:bg-red-700 text-white shadow-[0_0_30px_rgba(220,38,38,0.3)]' : 'bg-primary hover:bg-primary/90 text-black shadow-[0_0_30px_rgba(var(--primary-rgb),0.3)]'}`}
+            className={`w-full h-[72px] rounded-[28px] text-xl font-black transition-all active:scale-95 flex items-center justify-center relative touch-manipulation cursor-pointer border-none outline-none select-none -webkit-tap-highlight-color-transparent z-[100] ${isStreaming ? 'bg-red-600 text-white shadow-[0_0_30px_rgba(220,38,38,0.3)]' : 'bg-primary text-black shadow-[0_0_30px_rgba(var(--primary-rgb),0.3)]'}`}
+            style={{WebkitTapHighlightColor: 'transparent'}}
           >
             {isStreaming ? (
               <div className="flex items-center gap-3">
-                 <RotateCcw className="w-6 h-6 animate-spin-slow" />
+                 <RotateCcw className="w-6 h-6 animate-spin-slow pointer-events-none" />
                  TERMINATE LINK
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                 <Zap className="w-6 h-6" />
+                 <Zap className="w-6 h-6 pointer-events-none" />
                  LINK TO SOC
               </div>
             )}
-          </Button>
+          </button>
       </div>
 
       {/* Internal Canvas (Hidden) for processing */}
