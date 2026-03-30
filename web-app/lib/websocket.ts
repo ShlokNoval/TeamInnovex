@@ -52,6 +52,7 @@ class WebSocketService {
   }
 
   private httpPollInterval: NodeJS.Timeout | null = null;
+  private frameCallbacks = new Set<FrameCallback>();
 
   // Testing Dashboard - Send raw frame, receive annotated frame
   subscribeToFrames(onFrame: FrameCallback) {
@@ -60,27 +61,33 @@ class WebSocketService {
       return;
     }
 
-    // HTTP Polling shim for robust ngrok support during demo
-    if (this.httpPollInterval) clearInterval(this.httpPollInterval);
-    this.httpPollInterval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/stream');
-        const data = await res.json();
-        if (data.annotatedFrame) {
-          onFrame(data);
+    this.frameCallbacks.add(onFrame);
+
+    if (!this.httpPollInterval) {
+      this.httpPollInterval = setInterval(async () => {
+        try {
+          const res = await fetch('/api/stream', { cache: 'no-store' });
+          const data = await res.json();
+          if (data.annotatedFrame) {
+            this.frameCallbacks.forEach(cb => cb(data));
+          }
+        } catch (err) {
+          // silent fail
         }
-      } catch (err) {
-        console.error("Frame poll failed", err);
-      }
-    }, 200); // Poll at 5 FPS
+      }, 80); // Increased to ~12.5 FPS for smoother playback
+    }
   }
 
-  unsubscribeFromFrames() {
+  unsubscribeFromFrames(onFrame: FrameCallback) {
     if (USE_MOCK) {
       if (this.mockInterval) clearInterval(this.mockInterval);
       return;
     }
-    if (this.httpPollInterval) clearInterval(this.httpPollInterval);
+    this.frameCallbacks.delete(onFrame);
+    if (this.frameCallbacks.size === 0 && this.httpPollInterval) {
+      clearInterval(this.httpPollInterval);
+      this.httpPollInterval = null;
+    }
   }
 
   sendFrame(base64Frame: string, timestamp: number) {

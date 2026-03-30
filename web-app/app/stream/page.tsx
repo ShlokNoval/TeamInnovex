@@ -102,7 +102,7 @@ export default function MobileStreamPage() {
         context.restore()
         
         // Convert to Base64
-        const base64 = canvas.toDataURL('image/jpeg', 0.6) // 60% quality jpeg
+        const base64 = canvas.toDataURL('image/jpeg', 0.4) // Reduced from 0.6 to 0.4 for speed
         
         // Send via WebSocket
         wsService.sendFrame(base64, Date.now())

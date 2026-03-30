@@ -45,8 +45,8 @@ function TestingDashboardContent() {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden z-10">
-        <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-6">
+      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden z-10 h-[calc(100vh-76px)]">
+        <div className="flex-1 p-4 lg:p-6 flex flex-col gap-4 min-h-0">
           {!videoFile && !isLive ? (
             <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-6 animate-in zoom-in-95 duration-500">
               <div className="max-w-md w-full p-1 rounded-2xl bg-linear-to-b from-primary/20 to-transparent">
@@ -108,16 +108,20 @@ function TestingDashboardContent() {
                 <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-primary z-20 pointer-events-none" />
                 <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-primary z-20 pointer-events-none" />
                 <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-primary z-20 pointer-events-none" />
-                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-primary z-20 pointer-events-none" />
+                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-primary z-20 pointer-events-none shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]" />
                 
-                <VideoPlayer file={videoFile} />
+                <div className="w-full h-full relative bg-black">
+                  <VideoPlayer file={videoFile} />
+                </div>
               </div>
             </div>
           )}
         </div>
         
-        <div className="w-full lg:w-96 border-l border-white/5 bg-card/60 backdrop-blur flex flex-col">
-          <DetectionSidebar />
+        <div className="w-full lg:w-96 border-l border-white/5 bg-card/60 backdrop-blur flex flex-col relative h-full min-h-0">
+          <div className="absolute inset-0">
+            <DetectionSidebar />
+          </div>
         </div>
       </main>
     </div>

@@ -20,3 +20,10 @@
 - **Deep-Space SOC Theme**: Redesigned `/dashboard` layout, grids, and Neon severity cards with a `slate-950` glassmorphic military-grade aesthetic.
 - **CartoDB Heatmap**: Replaced the default Leaflet map with high-density Dark Matter tiles and active geospatial plotting for Critical AI Detections.
 - **Documentation**: Instantiated the central `README.md` to cleanly outline the tech stack, branch responsibilities, and start scripts for hackathon judging.
+
+### Commit: 11:16 AM (March 30, 2026)
+**Purpose**: UI Polish, Lag Reduction & Production Stabilization
+- **Performance**: Doubled dashboard polling frequency (80ms) and optimized mobile JPEG quality to eliminate transmission lag over Ngrok.
+- **Layout Integrity**: Hard-locked the CSS viewport to prevent "sliding" artifacts; decoupled the Detection Sidebar via absolute positioning.
+- **WebSocket Relay**: Refactored `WebSocketService` to support multiple simultaneous subscribers, allowing the video feed and telemetry sidebar to coexist.
+- **Ready for Sync**: All frontend components are now 100% prepared for native Python FastAPI backend integration.

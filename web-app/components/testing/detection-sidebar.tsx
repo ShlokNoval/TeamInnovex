@@ -11,7 +11,7 @@ export function DetectionSidebar() {
   const [counts, setCounts] = useState({ pothole: 0, animal: 0, accident: 0 })
 
   useEffect(() => {
-    wsService.subscribeToFrames((response) => {
+    const handleFrame = (response: any) => {
       if (response.detections && response.detections.length > 0) {
         setDetections(prev => {
           const updated = [...response.detections, ...prev].slice(0, 50) // Keep last 50
@@ -21,7 +21,7 @@ export function DetectionSidebar() {
         // Update counts
         setCounts(prev => {
           const newCounts = { ...prev }
-          response.detections.forEach(d => {
+          response.detections.forEach((d: any) => {
             if (newCounts[d.class as keyof typeof newCounts] !== undefined) {
               newCounts[d.class as keyof typeof newCounts]++
             }
@@ -29,10 +29,12 @@ export function DetectionSidebar() {
           return newCounts
         })
       }
-    })
+    };
+
+    wsService.subscribeToFrames(handleFrame)
 
     return () => {
-      wsService.unsubscribeFromFrames()
+      wsService.unsubscribeFromFrames(handleFrame)
     }
   }, [])
 

@@ -50,7 +50,7 @@ export function VideoPlayer({ file }: VideoPlayerProps) {
 
     return () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl)
-      wsService.unsubscribeFromFrames()
+      wsService.unsubscribeFromFrames(handleFrame)
       if (requestRef.current) cancelAnimationFrame(requestRef.current)
     }
   }, [file])
@@ -77,9 +77,11 @@ export function VideoPlayer({ file }: VideoPlayerProps) {
       
       // Only process every ~5th frame for performance (approx 6 FPS)
       if (frameCountRef.current % 5 === 0) {
-        // Reduced quality JPEG for speed (matches 50-80KB architecture req)
-        const base64Frame = canvas.toDataURL("image/jpeg", 0.6)
-        wsService.sendFrame(base64Frame, video.currentTime)
+        // Convert to Base64 - Optimized for throughput over the tunnel
+        const base64 = canvas.toDataURL('image/jpeg', 0.4) // Reduced from 0.6 to 0.4 for speed
+        
+        // Send via WebSocket
+        wsService.sendFrame(base64, video.currentTime)
       }
     }
 
@@ -116,18 +118,20 @@ export function VideoPlayer({ file }: VideoPlayerProps) {
       <canvas ref={canvasRef} className="hidden" />
 
       {/* Main Display - shows annotated frame if available, otherwise just black placeholder */}
-      {annotatedFrame ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img 
-          src={annotatedFrame} 
-          alt="AI Annotated Frame" 
-          className="w-full h-full object-contain bg-black"
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center bg-black/90">
-          <div className="text-muted-foreground animate-pulse">Initializing AI Models...</div>
-        </div>
-      )}
+      <div className="absolute inset-0 flex items-center justify-center bg-black">
+        {annotatedFrame ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img 
+            src={annotatedFrame} 
+            alt="AI Annotated Frame" 
+            className="absolute inset-0 w-full h-full object-contain"
+          />
+        ) : (
+          <div className="text-muted-foreground animate-pulse font-mono text-xs tracking-widest">
+            [ SENSOR_INIT_SEQUENCE_BYPASS_ACTIVE ]
+          </div>
+        )}
+      </div>
 
       {/* Overlay controls and info */}
       <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-sm text-white px-3 py-1.5 rounded text-sm font-mono flex gap-4">

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 // Global memory cache to hold the latest frame and a queue of pending alerts
 declare global {
   var _latestFrameData: any;
@@ -54,8 +56,11 @@ export async function POST(req: Request) {
       timestamp: data.timestamp
     };
 
+    console.log(`[API] Received frame. Queue size: ${globalThis._alertQueue.length}. Detect: ${hasDetection}`);
+
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error('[API] Error processing frame:', error);
     return NextResponse.json({ error: 'Failed to process' }, { status: 500 });
   }
 }
@@ -65,6 +70,7 @@ export async function GET() {
   
   // If there's a frame in memory, return it along with any queued alerts
   if (globalThis._latestFrameData) {
+    // console.log(`[API] Serving frame to dashboard`);
     return NextResponse.json({ ...globalThis._latestFrameData, newAlerts: alerts });
   }
   return NextResponse.json({ active: false, newAlerts: alerts });
