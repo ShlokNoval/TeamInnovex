@@ -1,0 +1,769 @@
+AI-BASED ROAD HAZARD DETECTION
+Complete Backend Architecture & Database Schema
+24-Hour Hackathon Reference Document
+1. System Overview
+The backend is a FastAPI Python application that sits between two React frontends: the Testing Dashboard (where users upload video/image files) and the Admin Panel (command centre for authorities). Since there is no live CCTV hardware, every piece of data originates from a user-uploaded file. The backend processes frames from that file through a 6-layer AI pipeline, persists results in a relational database, and streams annotated frames and alerts in real-time over WebSocket.
+1.1 Six-Layer Processing Pipeline
+1 — API Layer: 
+FastAPI WebSocket (/ws) + REST (/api/*). Entry point for all traffic from both frontends.
+2 — Input Processing: 
+Decodes base64 frame, resizes to 640×480, applies night-mode enhancement if brightness < threshold.
+3 — AI Model Layer: 
+Three parallel YOLOv8 threads: Pothole module, Animal module, Accident module. Each returns bounding boxes and confidence scores.
+4 — Feature Extraction: 
+Per-detection enrichment: severity classification, behavior tagging, speed estimation, road-zone check, geo-tag attachment.
+5 — Multi-Hazard Fusion: 
+Combines risks across all three modules into a single 0–100 risk score. Flags CRITICAL when multiple hazards co-occur.
+6 — Output Layer: 
+Three parallel outputs: annotated frame → Testing Dashboard, alert events → Admin Panel via WebSocket, all detections → database.
+2. Database Design Principles
+The database uses MongoDB (or PostgreSQL with JSONB) and is structured around a single central spine: upload_sessions → detections. Every other table is either a child of detections (1-to-1 module-detail tables) or a grouping layer built on top of detections (clusters, tracks, hotspots). This design means all cross-module analytics queries hit only the detections table, while module-specific queries join to their detail table.
+Alert trigger rule: An alert row is created only when risk_score >= 70 OR the fusion layer sets combined_risk = CRITICAL. Low-severity detections are stored in detections but never generate an alert row.
+3. Core / Shared Tables
+These two tables are the root of the entire schema. Every other table in the system eventually joins back to one of them.
+  CORE — upload_sessions  
+upload_sessions
+Purpose: One row per file uploaded to the Testing Dashboard. Replaces the concept of a live camera. All detections, alerts, analytics, tracks, and clusters are scoped to a session. If the same video is uploaded twice it produces two independent sessions.
+Example use: User uploads 'highway_night.mp4'. A session row is created with status=pending. As frames are processed, processing_start is filled. When done, status=completed, processing_end is filled, total_frames=1240.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key. Referenced by every other table in the system.
+filename
+TEXT
+Original file name e.g. 'road_nh44.mp4' or 'pothole_image.jpg'.
+file_type
+ENUM
+video | image
+file_size_bytes
+INT
+Raw file size for UI display.
+duration_seconds
+FLOAT
+Video duration in seconds. NULL for images.
+total_frames
+INT
+Total frames to process. NULL for images (treated as 1 frame).
+fps
+FLOAT
+Frames per second of original video. NULL for images.
+resolution_w
+INT
+Frame width in pixels.
+resolution_h
+INT
+Frame height in pixels.
+uploaded_at
+TIMESTAMP
+When the file arrived at the backend.
+processing_start
+TIMESTAMP
+NULL until the first frame begins processing.
+processing_end
+TIMESTAMP
+NULL until processing completes or fails.
+status
+ENUM
+pending | processing | completed | failed
+label
+TEXT
+Optional user-supplied name e.g. 'Test video 1 — NH44 night'.
+error_message
+TEXT
+NULL unless status = failed. Stores the Python exception message.
+  CORE — detections  
+detections
+Purpose: Central fact table. Every AI detection from every module writes one row here first, then writes to its module-specific detail table. This allows all cross-module analytics (total count, severity distribution, risk over time) to query a single table without joining three separate detection tables.
+Example use: YOLO detects a cow on frame 340 of a video with 85% confidence. One row goes into detections (type=animal, severity=high, risk_score=78). A second row goes into animal_details linked by detection_id. Because risk_score >= 70, an alert row is also created.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key. Referenced by all detail tables, alerts, and tracking frames.
+session_id
+UUID (FK)
+→ upload_sessions.id. Every detection belongs to one upload session.
+type
+ENUM
+pothole | animal | accident
+confidence
+FLOAT
+YOLO confidence score 0.0–1.0.
+bbox
+JSONB
+{x, y, w, h} bounding box in pixels on the original frame.
+frame_number
+INT
+Which frame in the video. Always 0 for images.
+timestamp_in_video
+FLOAT
+Seconds into video (frame_number ÷ fps). 0.0 for images.
+severity
+ENUM
+low | medium | high — set by the feature extraction layer.
+risk_score
+INT
+0–100 unified risk score from the fusion layer.
+thumbnail_url
+TEXT
+Filesystem path to cropped bbox image for display in alerts.
+annotated_frame_url
+TEXT
+Path to full annotated frame image with boxes drawn by OpenCV.
+fusion_flags
+JSONB
+{combined_risk: 'CRITICAL', contributing_hazard_ids: ['uuid1','uuid2']}
+  CORE — alerts  
+alerts
+Purpose: Stores every alert that is broadcast to the Admin Panel. Only created when risk_score >= 70 or fusion layer flags CRITICAL. This separation means the Admin Panel only ever queries this small table for its live feed — it never scans all detections.
+Example use: A high-severity pothole is detected (risk_score = 82). An alert row is created with alert_level=high, status=new. The backend emits it via WebSocket. An authority clicks Acknowledge — status changes to acknowledged, acknowledged_by='Officer Sharma', acknowledged_at is filled.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key.
+detection_id
+UUID (FK)
+→ detections.id. 1-to-1 with the detection that triggered this alert.
+session_id
+UUID (FK)
+→ upload_sessions.id. Denormalized for fast session-level filtering.
+alert_level
+ENUM
+medium | high | critical
+severity_score
+INT
+0–100. Copied from detections.risk_score at alert creation time.
+type
+ENUM
+pothole | animal | accident. Denormalized for fast type filtering.
+triggered_at
+TIMESTAMP
+When the alert was generated.
+status
+ENUM
+new | acknowledged | resolved
+acknowledged_by
+TEXT
+Name/ID of authority who acknowledged. NULL until acknowledged.
+acknowledged_at
+TIMESTAMP
+NULL until acknowledged.
+resolved_at
+TIMESTAMP
+NULL until resolved.
+frame_number
+INT
+Denormalized from detection for quick reference without join.
+timestamp_in_video
+FLOAT
+Denormalized seconds-into-video for display.
+thumbnail_url
+TEXT
+Denormalized from detection for fast Admin Panel display.
+4. Pothole Module Tables
+Four tables cover the three pothole USPs: severity classification (pothole_details), lifecycle tracking across frames (pothole_clusters + pothole_cluster_sightings), and automated reporting (pothole_reports).
+  POTHOLE — Feature: Severity Classification  
+pothole_details
+Purpose: 1-to-1 extension of detections for pothole-specific attributes. Stores the raw measurements used to compute severity and the reason for the classification.
+Example use: A pothole bbox is 180×60 px → area_px = 10800 (>8000 → high). It sits at road_position = center → severity bumped and reason stored as 'large area, road center position'. This row is created immediately after the detections row.
+Severity logic: area_px < 2000 → low | 2000–8000 → medium | >8000 → high. Center lane position bumps severity up one level.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key.
+detection_id
+UUID (FK UNIQUE)
+→ detections.id. UNIQUE enforces the 1-to-1 relationship.
+area_px
+INT
+Bounding box pixel area (w × h). Primary severity input.
+aspect_ratio
+FLOAT
+w ÷ h. Elongated ratio (>3) indicates a road crack pattern.
+severity_class
+ENUM
+low | medium | high — computed by feature extraction layer.
+severity_reason
+TEXT
+Human-readable explanation e.g. 'large area, road center position'.
+road_position
+ENUM
+center | shoulder | edge | unknown — derived from bbox x-position.
+estimated_cm2
+FLOAT
+Real-world size estimate using known camera height/FOV (optional for hackathon).
+surface_context
+TEXT
+Any additional context from the model e.g. 'wet surface', 'gravel patch'.
+  POTHOLE — Feature: Lifecycle Tracking  
+pothole_clusters
+Purpose: De-duplicates the same physical pothole seen across many video frames. Without clustering, a 10-second clip of one pothole would create hundreds of separate detection rows. The cluster represents the single real-world pothole, while sightings record each frame it appeared in.
+Example use: A pothole appears in frames 80–220 of a video (140 frames). One cluster row is created with first_frame=80, last_frame=220, sighting_count=140. Its severity starts as medium but the cluster tracks when it 'worsens' (bbox grows) and sets status=worsening.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key. Referenced by pothole_cluster_sightings and pothole_reports.
+session_id
+UUID (FK)
+→ upload_sessions.id. Cluster belongs to one session.
+first_frame
+INT
+Frame number when this pothole was first detected.
+last_frame
+INT
+Frame number of the most recent sighting.
+sighting_count
+INT
+Total number of frames in which this pothole was detected.
+current_severity
+ENUM
+low | medium | high — updated each time a new sighting changes severity.
+status
+ENUM
+active | worsening | stable — worsening if avg_bbox area grows >20% over time.
+avg_bbox
+JSONB
+Running average of {x, y, w, h} across all sightings.
+representative_thumbnail
+TEXT
+Path to the crop from the clearest/highest-confidence sighting frame.
+pothole_cluster_sightings
+Purpose: Join table linking each individual detection (one frame) back to the cluster (the real-world pothole). Enables time-series queries like 'show me how this pothole's severity changed across frames 80–220'.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key.
+cluster_id
+UUID (FK)
+→ pothole_clusters.id. Many sightings belong to one cluster.
+detection_id
+UUID (FK)
+→ detections.id. Each sighting references one detection event.
+frame_number
+INT
+Denormalized from detection for fast timeline queries.
+severity_at_frame
+ENUM
+low | medium | high — snapshot of severity at this specific frame.
+  POTHOLE — Feature: Automated Reporting  
+pothole_reports
+Purpose: Stores the structured, exportable report generated for each pothole cluster. Without real GPS the location comes from the user-supplied session label. The report_payload JSONB field contains the full data needed to generate a PDF or CSV export.
+Example use: After processing completes, the backend auto-generates a report for every cluster with severity = high. The report is status=draft until an authority clicks 'Send Report', at which point status=sent and acknowledged_by is filled.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key.
+cluster_id
+UUID (FK)
+→ pothole_clusters.id. One report per cluster.
+session_id
+UUID (FK)
+→ upload_sessions.id. Denormalized for session-level filtering.
+generated_at
+TIMESTAMP
+When the report was auto-generated.
+severity
+ENUM
+low | medium | high — copied from cluster at generation time.
+location_label
+TEXT
+User-entered location or auto-filled as 'Session: <filename>'.
+frame_reference
+INT
+The best representative frame number for the report image.
+image_url
+TEXT
+Path to the representative annotated frame image.
+report_payload
+JSONB
+Full structured report: {pothole_id, severity, sightings, bbox_history, location, images[]}
+status
+ENUM
+draft | sent | acknowledged
+5. Animal Module Tables
+Five tables cover the animal USPs: behavior + region risk (animal_details), trajectory prediction (animal_track_sessions + animal_track_frames), and hotspot intelligence (animal_hotspots).
+  ANIMAL — Feature: Behavior Classification + Region Risk  
+animal_details
+Purpose: 1-to-1 extension of detections for animal-specific attributes. Captures species, behavior state, whether the animal is inside the road zone, and whether night-mode preprocessing was applied.
+Example use: A cow is detected crossing the road at night (behavior=crossing, in_road_zone=true, light_level=night, night_mode_applied=true). risk_score in detections is set to 85 → triggers an alert. The zone_label='road_center' tells authorities exactly how dangerous the position is.
+Road zone definition: The middle 60% of frame height (y > 0.2×H and y < 0.8×H) is treated as the road zone for the hackathon. This threshold can be configured per session.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key.
+detection_id
+UUID (FK UNIQUE)
+→ detections.id. UNIQUE enforces 1-to-1.
+species
+ENUM
+dog | cow | goat | pig | cat | other
+behavior
+ENUM
+sitting | standing | walking | running | crossing
+behavior_confidence
+FLOAT
+Confidence of behavior classification 0.0–1.0.
+in_road_zone
+BOOLEAN
+TRUE if animal centroid falls within the configured road zone polygon.
+zone_label
+TEXT
+road_center | shoulder | footpath | safe — human-readable zone name.
+night_mode_applied
+BOOLEAN
+TRUE if CLAHE/low-light preprocessing was applied to this frame.
+light_level
+ENUM
+day | dusk | night — determined by mean frame brightness.
+estimated_speed_px
+FLOAT
+Pixels per frame estimated from bbox centroid delta. NULL if sitting/standing.
+  ANIMAL — Feature: Trajectory Prediction  
+animal_track_sessions
+Purpose: Represents the full path of one animal across multiple consecutive frames. Stores whether the model predicted road entry and whether that prediction was correct — used for accuracy analysis.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key. Referenced by all animal_track_frames for this animal.
+session_id
+UUID (FK)
+→ upload_sessions.id.
+species
+ENUM
+The species being tracked.
+track_start_frame
+INT
+Frame when this animal was first detected.
+track_end_frame
+INT
+Frame when tracking ended (lost or video ended). NULL if still tracking.
+entered_road
+BOOLEAN
+Did this animal actually cross into the road zone during tracking?
+predicted_entry
+BOOLEAN
+Did the trajectory model predict road entry?
+prediction_was_correct
+BOOLEAN
+NULL until track ends. TRUE if predicted_entry matched entered_road.
+animal_track_frames
+Purpose: One row per frame per tracked animal. Stores the raw trajectory data (position, velocity, prediction) needed to reconstruct the animal's path and run trajectory extrapolation.
+Example use: A dog is tracked across frames 50–90. 40 rows are created in this table. To animate the dog's path in the UI: SELECT * FROM animal_track_frames WHERE track_id = X ORDER BY frame_number.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key.
+track_id
+UUID (FK)
+→ animal_track_sessions.id. Groups all frames for one animal.
+detection_id
+UUID (FK)
+→ detections.id. Links back to the raw detection for this frame.
+frame_number
+INT
+Frame number in the video.
+centroid_x
+FLOAT
+X pixel position of bbox center.
+centroid_y
+FLOAT
+Y pixel position of bbox center.
+velocity_x
+FLOAT
+Horizontal velocity in pixels/frame (positive = moving right).
+velocity_y
+FLOAT
+Vertical velocity in pixels/frame (positive = moving down toward camera).
+predicted_road_entry_in_frames
+INT
+Estimated frames until the animal enters the road zone. NULL if no prediction yet.
+  ANIMAL — Feature: Hotspot Intelligence  
+animal_hotspots
+Purpose: Aggregates animal activity by frame region within a session. The heatmap_grid JSONB stores an 8×8 grid of detection counts mapped to frame areas — this powers the heatmap visualization on the Admin Panel without re-scanning all detection rows.
+Example use: After processing, the backend computes that cells [3,4] and [3,5] in the 8×8 grid have the highest counts (20+ detections). These become the red hotspot areas on the heatmap. species='all' covers every animal; separate rows can be created per species.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key.
+session_id
+UUID (FK)
+→ upload_sessions.id.
+species
+ENUM
+dog | cow | goat | pig | cat | other | all
+frame_range_start
+INT
+Starting frame of the analysis window.
+frame_range_end
+INT
+Ending frame of the analysis window.
+detection_count
+INT
+Total detections in this species/frame range combination.
+risk_level
+ENUM
+low | medium | high | critical — based on detection_count thresholds.
+heatmap_grid
+JSONB
+8×8 2D array of hit counts. Each cell covers frame_w/8 × frame_h/8 pixels.
+6. Accident Module Tables
+Five tables cover the accident USPs: severity scoring + hit-and-run + traffic disruption (accident_details), vehicle tracking for hit-and-run logic (vehicle_track_sessions + vehicle_track_frames), and predictive detection (accident_precursors).
+  ACCIDENT — Feature: Severity Scoring + Hit-and-Run + Traffic Disruption  
+accident_details
+Purpose: 1-to-1 extension of detections for accident-specific attributes. Stores the multi-factor severity score, hit-and-run flag, and traffic density measurements before/after the event.
+Example use: A collision between a truck and a bike is detected. vehicle_count=2, vehicle_types={truck:1, bike:1}, human_detected=true → severity_score=91 (critical). Within the next 30 frames the truck accelerates away → hit_and_run_flag=true, hit_and_run_confidence=0.88. Traffic density drops from 4.2 to 0.8 vehicles/frame → disruption_score=81%.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key.
+detection_id
+UUID (FK UNIQUE)
+→ detections.id. UNIQUE enforces 1-to-1.
+severity_score
+INT
+0–100 computed score. Factors: speed, vehicle count, vehicle type, human presence.
+vehicle_count
+INT
+Number of vehicles involved in or near the incident.
+vehicle_types
+JSONB
+{car:2, truck:1, bike:0, auto:1} — count by category.
+human_detected
+BOOLEAN
+Whether a pedestrian/person was detected in the incident frame.
+estimated_speed_px
+FLOAT
+Estimated speed in pixels/frame from frame-differencing. NULL if static.
+is_predictive
+BOOLEAN
+TRUE = pre-collision alert (abnormal trajectory/sudden stop detected before impact).
+prediction_confidence
+FLOAT
+Confidence of the pre-collision prediction. NULL if is_predictive=false.
+hit_and_run_flag
+BOOLEAN
+TRUE if a vehicle departed the scene rapidly after the incident.
+hit_and_run_confidence
+FLOAT
+Confidence of hit-and-run classification. NULL if not flagged.
+traffic_density_before
+FLOAT
+Average vehicles/frame in the 30 frames before the incident.
+traffic_density_after
+FLOAT
+Average vehicles/frame in the 30 frames after the incident.
+disruption_score
+FLOAT
+(before - after) ÷ before × 100. Percentage traffic reduction caused by incident.
+road_blocked
+BOOLEAN
+TRUE if traffic density_after < 0.2 × traffic_density_before (near-zero flow).
+  ACCIDENT — Feature: Vehicle Tracking (Hit-and-Run)  
+vehicle_track_sessions
+Purpose: Represents the full trajectory of one vehicle across frames. Used to detect hit-and-run: if a vehicle was involved_in_accident=true and its track shows rapid acceleration away from the scene within 15 frames, hit_and_run_flag is set in accident_details.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key.
+session_id
+UUID (FK)
+→ upload_sessions.id.
+vehicle_type
+ENUM
+car | truck | bike | bus | auto | unknown
+track_start_frame
+INT
+First frame this vehicle appeared.
+track_end_frame
+INT
+Last frame this vehicle was tracked. NULL if still in scene.
+involved_in_accident
+BOOLEAN
+TRUE if this vehicle was associated with an accident detection event.
+vehicle_track_frames
+Purpose: Raw per-frame trajectory data for each vehicle. Used to compute velocity changes that indicate sudden stops or rapid departures. left_scene=TRUE on the frame the vehicle exits the camera frame.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key.
+track_id
+UUID (FK)
+→ vehicle_track_sessions.id.
+detection_id
+UUID (FK)
+→ detections.id. Links to the raw detection for this frame.
+frame_number
+INT
+Frame number.
+centroid_x
+FLOAT
+X pixel position of vehicle bbox center.
+centroid_y
+FLOAT
+Y pixel position of vehicle bbox center.
+velocity_x
+FLOAT
+Horizontal velocity pixels/frame.
+velocity_y
+FLOAT
+Vertical velocity pixels/frame.
+left_scene
+BOOLEAN
+TRUE on the frame the vehicle's bbox exits the frame boundaries.
+  ACCIDENT — Feature: Predictive Accident Detection  
+accident_precursors
+Purpose: Stores pre-collision warning events — anomalies in vehicle behavior (sudden stop, wrong direction, erratic path) that the system detects before an accident occurs. The led_to_accident field is filled retroactively by checking whether an accident detection followed within 60 frames.
+Example use: A car makes a sudden stop (velocity drops from 12 px/frame to 0.3 in 3 frames) → precursor_type=sudden_stop, confidence=0.82. 18 frames later a collision is detected → led_to_accident=TRUE, related_detection_id is filled. This is the 'predictive' USP.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key.
+session_id
+UUID (FK)
+→ upload_sessions.id.
+vehicle_track_id
+UUID (FK)
+→ vehicle_track_sessions.id. Which vehicle showed the anomaly.
+detected_at_frame
+INT
+Frame at which the precursor anomaly was detected.
+precursor_type
+ENUM
+sudden_stop | wrong_direction | erratic_path | near_miss
+confidence
+FLOAT
+Model confidence in the anomaly classification 0.0–1.0.
+led_to_accident
+BOOLEAN
+NULL until 60 frames pass. TRUE if an accident detection followed within that window.
+related_detection_id
+UUID (FK)
+→ detections.id. The accident detection that followed. NULL if no accident occurred.
+7. Analytics / Cache Tables
+These tables avoid expensive re-aggregation on every Admin Panel request. They are written to incrementally as frames are processed and read by the Admin Panel every 30 seconds.
+  ANALYTICS — Metric Cache  
+analytics_cache
+Purpose: Stores pre-computed aggregate metrics so the Admin Panel's metric cards and charts can be served instantly. Each row is one named metric for one session (or NULL session for global aggregates).
+Example use: After every 10 frames, the backend upserts analytics_cache rows: metric_name='pothole_high_count', value=7, breakdown=null, session_id=X. The Admin Panel's 'Potholes Detected' card reads this row rather than COUNT(*) from detections.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key.
+session_id
+UUID (FK)
+→ upload_sessions.id. NULL = global all-sessions aggregate.
+metric_name
+TEXT
+e.g. total_detections | pothole_high_count | animal_crossing_count | avg_risk_score
+value
+FLOAT
+The scalar metric value.
+breakdown
+JSONB
+Optional breakdown e.g. {low:12, medium:34, high:8} for severity distribution.
+computed_at
+TIMESTAMP
+When this metric was last computed. Used to decide if refresh is needed.
+time_bucket
+ENUM
+session | hourly | daily | alltime — granularity of the metric.
+  ANALYTICS — Per-Frame Stats  
+frame_analytics
+Purpose: One row per processed frame. Stores detection counts and max risk score for that frame. This is the source data for the Admin Panel's line chart ('risk score over time through the video') without needing to re-query detections.
+Example use: The line chart query is simply: SELECT frame_number, max_risk_score FROM frame_analytics WHERE session_id = X ORDER BY frame_number. Rendering 1200 points from this lightweight table is instant.
+Field
+Type
+Description
+id
+UUID (PK)
+Primary key.
+session_id
+UUID (FK)
+→ upload_sessions.id.
+frame_number
+INT
+The frame this row covers.
+pothole_count
+INT
+Number of pothole detections in this frame.
+animal_count
+INT
+Number of animal detections in this frame.
+accident_count
+INT
+Number of accident detections in this frame.
+max_risk_score
+INT
+Highest risk_score across all detections in this frame (0–100).
+processing_ms
+INT
+How long the backend took to process this frame in milliseconds.
+8. Complete Table Relationship Map
+Every foreign key relationship in the system is listed below. The direction is Parent → Child (parent's PK is held as FK in child).
+From table
+Cardinality
+To table
+Via / notes
+upload_sessions
+1 → many
+detections
+detections.session_id
+upload_sessions
+1 → many
+alerts
+alerts.session_id (denormalized)
+upload_sessions
+1 → many
+pothole_clusters
+pothole_clusters.session_id
+upload_sessions
+1 → many
+animal_track_sessions
+animal_track_sessions.session_id
+upload_sessions
+1 → many
+vehicle_track_sessions
+vehicle_track_sessions.session_id
+upload_sessions
+1 → many
+animal_hotspots
+animal_hotspots.session_id
+upload_sessions
+1 → many
+frame_analytics
+frame_analytics.session_id
+upload_sessions
+1 → many
+analytics_cache
+analytics_cache.session_id (nullable)
+upload_sessions
+1 → many
+accident_precursors
+accident_precursors.session_id
+detections
+1 → 1
+pothole_details
+pothole_details.detection_id (UNIQUE)
+detections
+1 → 1
+animal_details
+animal_details.detection_id (UNIQUE)
+detections
+1 → 1
+accident_details
+accident_details.detection_id (UNIQUE)
+detections
+1 → 0..1
+alerts
+alerts.detection_id
+detections
+1 → many
+pothole_cluster_sightings
+pothole_cluster_sightings.detection_id
+detections
+1 → many
+animal_track_frames
+animal_track_frames.detection_id
+detections
+1 → many
+vehicle_track_frames
+vehicle_track_frames.detection_id
+detections
+0..1 → many
+accident_precursors
+accident_precursors.related_detection_id (nullable)
+pothole_clusters
+1 → many
+pothole_cluster_sightings
+pothole_cluster_sightings.cluster_id
+pothole_clusters
+1 → many
+pothole_reports
+pothole_reports.cluster_id
+animal_track_sessions
+1 → many
+animal_track_frames
+animal_track_frames.track_id
+vehicle_track_sessions
+1 → many
+vehicle_track_frames
+vehicle_track_frames.track_id
+vehicle_track_sessions
+1 → many
+accident_precursors
+accident_precursors.vehicle_track_id
+9. Backend File Structure
+backend/
+├── main.py                     FastAPI app entry point, CORS, WebSocket mount
+├── requirements.txt            All Python dependencies
+├── models/                     AI model weight files
+│   ├── pothole.pt              YOLOv8 pothole detection weights
+│   ├── animal.pt               YOLOv8 animal detection weights
+│   └── vehicle.pt              YOLOv8 vehicle detection weights
+├── services/
+│   ├── ai_engine.py            Orchestrates all 3 YOLO threads in parallel
+│   ├── feature_extraction.py   Severity, behavior, speed, zone classification
+│   ├── fusion.py               Multi-hazard risk fusion (0–100 score)
+│   ├── annotation.py           OpenCV bounding box drawing → base64
+│   ├── alert_manager.py        Alert creation + WebSocket broadcast
+│   ├── tracker.py              Animal + vehicle multi-frame tracking logic
+│   └── analytics.py            frame_analytics + analytics_cache updater
+├── api/
+│   ├── websocket.py            /ws endpoint handler
+│   └── routes.py               All REST endpoints (/api/*)
+└── database/
+    ├── models.py               All 18 table schemas (SQLAlchemy or MongoEngine)
+    └── connection.py           DB connection + session factory
+10. Hackathon MVP Priority
+Build tables in this order. Stop when you run out of time — each phase is a working demo.
+Phase
+Tables to build
+What the demo can show
+Hour 0–6
+(MUST)
+upload_sessions, detections, alerts, pothole_details, animal_details, accident_details
+End-to-end: upload → AI → bounding boxes → alert in Admin Panel
+Hour 6–12
+(CORE)
+frame_analytics, analytics_cache, pothole_clusters, pothole_cluster_sightings
+Live charts, metric cards, de-duplicated pothole lifecycle
+Hour 12–18
+(POLISH)
+animal_track_sessions, animal_track_frames, vehicle_track_sessions, vehicle_track_frames
+Trajectory visualisation, hit-and-run tracking
+Hour 18–22
+(BONUS)
+animal_hotspots, accident_precursors, pothole_reports
+Heatmap, predictive alerts, exportable reports
+Total tables: 18  |  Minimum viable set: 6  |  Full system: 18
