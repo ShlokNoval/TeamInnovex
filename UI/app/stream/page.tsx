@@ -103,9 +103,9 @@ export default function MobileStreamPage() {
         )
         context.restore()
         
-        // Convert to Base64
-        const base64 = canvas.toDataURL('image/jpeg', 0.4) // Reduced from 0.6 to 0.4 for speed
-        
+        // Convert to Base64 (Dynamic quality based on user selection)
+        const quality = streamQuality === 'low' ? 0.2 : streamQuality === 'med' ? 0.4 : 0.6;
+        const base64 = canvas.toDataURL('image/jpeg', quality);
         // Send via WebSocket (including current location)
         wsService.sendFrame(base64, Date.now(), location || undefined)
         

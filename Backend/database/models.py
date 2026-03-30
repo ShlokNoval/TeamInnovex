@@ -1,7 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy.dialects.sqlite import JSON # SQLite json fallback or just use generic JSON
-from sqlalchemy import Column, String, Integer, Float, Boolean, ForeignKey, DateTime, Enum, Text
+from sqlalchemy import Column, String, Integer, Float, Boolean, ForeignKey, DateTime, Enum, Text, JSON
 from sqlalchemy.orm import relationship
 from database.connection import db
 

@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { AnnotatedFrameResponse, Incident } from './types';
 
-// Disabled MOCK mode so mobile frames can actually reach the local network relay.
+// Forced to false for live integration
 const USE_MOCK = false;
 
 type AlertCallback = (alert: Incident) => void;
@@ -32,10 +32,20 @@ class WebSocketService {
       this.socket = io(this.getBackendUrl(), {
         path: '/ws',
         autoConnect: true,
+        transports: ['websocket', 'polling']
       });
 
-      this.socket.on('connect', () => console.log('WebSocket connected'));
-      this.socket.on('disconnect', () => console.log('WebSocket disconnected'));
+      this.socket.on('connect', () => {
+        console.log('WebSocket connected to Python Backend');
+      });
+      
+      this.socket.on('disconnect', () => {
+        console.log('WebSocket disconnected');
+      });
+
+      this.socket.on('error', (err) => {
+        console.error('WebSocket Error:', err);
+      });
     }
   }
 
@@ -53,6 +63,7 @@ class WebSocketService {
 
   private httpPollInterval: NodeJS.Timeout | null = null;
   private frameCallbacks = new Set<FrameCallback>();
+  private isPollingFrames = false;
 
   // Testing Dashboard - Send raw frame, receive annotated frame
   subscribeToFrames(onFrame: FrameCallback) {
@@ -61,48 +72,41 @@ class WebSocketService {
       return;
     }
 
-    this.frameCallbacks.add(onFrame);
+    if (!this.socket) this.connect();
 
-    if (!this.httpPollInterval) {
-      this.httpPollInterval = setInterval(async () => {
-        try {
-          const res = await fetch('/api/stream', { cache: 'no-store' });
-          const data = await res.json();
-          if (data.annotatedFrame) {
-            this.frameCallbacks.forEach(cb => cb(data));
-          }
-        } catch (err) {
-          // silent fail
-        }
-      }, 80); // Increased to ~12.5 FPS for smoother playback
-    }
+    this.socket?.on('frame_stream', (data: AnnotatedFrameResponse) => {
+      onFrame(data);
+    });
   }
 
-  unsubscribeFromFrames(onFrame: FrameCallback) {
+  unsubscribeFromFrames() {
     if (USE_MOCK) {
       if (this.mockInterval) clearInterval(this.mockInterval);
       return;
     }
-    this.frameCallbacks.delete(onFrame);
-    if (this.frameCallbacks.size === 0 && this.httpPollInterval) {
-      clearInterval(this.httpPollInterval);
-      this.httpPollInterval = null;
-    }
+    this.socket?.off('frame_stream');
   }
 
-  sendFrame(base64Frame: string, timestamp: number, location?: { lat: number, lng: number }) {
-    if (USE_MOCK) return; 
-    
-    // Send standard HTTP payload with optional location metadata
-    fetch('/api/stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        frame: base64Frame, 
+  private isSendingFrame = false;
+
+  async sendFrame(base64Frame: string, timestamp: number, location?: { lat: number, lng: number }) {
+    if (USE_MOCK || this.isSendingFrame) return;
+
+    this.isSendingFrame = true;
+    try {
+      if (!this.socket) this.connect();
+
+      // Emit the raw frame directly via Socket.IO to Flask backend
+      this.socket?.emit('raw_frame', {
+        frame: base64Frame,
         timestamp,
-        location 
-      })
-    }).catch(e => console.error("Send failed", e));
+        location
+      });
+    } catch (e) {
+      console.error("Send failed", e);
+    } finally {
+      this.isSendingFrame = false;
+    }
   }
 
   private httpAlertPollInterval: NodeJS.Timeout | null = null;
@@ -111,33 +115,23 @@ class WebSocketService {
   // Admin Dashboard - Receive new alerts
   subscribeToAlerts(onAlert: AlertCallback) {
     if (USE_MOCK) {
-       // Currently hardcoded to false, but keeping structure
       this.startMockAlertSimulation(onAlert);
       return;
     }
 
-    if (this.httpAlertPollInterval) clearInterval(this.httpAlertPollInterval);
-    this.httpAlertPollInterval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/stream');
-        const data = await res.json();
-        if (data.newAlerts && data.newAlerts.length > 0) {
-          data.newAlerts.forEach((alert: any) => {
-             if (!this.processedAlertIds.has(alert.id)) {
-                this.processedAlertIds.add(alert.id);
-                onAlert(alert);
-             }
-          });
-          // Keep set from growing infinitely
-          if (this.processedAlertIds.size > 100) {
-             const iterator = this.processedAlertIds.values();
-             for(let i=0; i<20; i++) this.processedAlertIds.delete(iterator.next().value!);
-          }
-        }
-      } catch (err) {
-        // silent fail on poll
-      }
-    }, 1000); // Admin polls every 1 second
+    if (!this.socket) this.connect();
+
+    this.socket?.on('new_alert', (alert: Incident) => {
+       if (!this.processedAlertIds.has(alert.id)) {
+          this.processedAlertIds.add(alert.id);
+          onAlert(alert);
+       }
+       
+       if (this.processedAlertIds.size > 100) {
+          const iterator = this.processedAlertIds.values();
+          for(let i=0; i<20; i++) this.processedAlertIds.delete(iterator.next().value!);
+       }
+    });
   }
 
   unsubscribeFromAlerts() {

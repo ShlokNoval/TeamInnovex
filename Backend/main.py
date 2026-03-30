@@ -1,10 +1,8 @@
 from flask import Flask
 from flask_cors import CORS
-from flask_socketio import SocketIO
-from database.connection import db, get_database_uri
-
+from database.extensions import db, socketio
+from database.connection import get_database_uri
 from flask_jwt_extended import JWTManager
-socketio = SocketIO(cors_allowed_origins="*")
 
 def create_app():
     app = Flask(__name__)
