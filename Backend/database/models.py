@@ -43,6 +43,8 @@ class Detection(db.Model):
     timestamp_in_video = Column(Float, default=0.0)
     severity = Column(String(50)) # low | medium | high
     risk_score = Column(Integer)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     thumbnail_url = Column(Text)
     annotated_frame_url = Column(Text)
     fusion_flags = Column(JSON, nullable=True)
@@ -64,6 +66,8 @@ class Alert(db.Model):
     resolved_at = Column(DateTime, nullable=True)
     frame_number = Column(Integer)
     timestamp_in_video = Column(Float)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     thumbnail_url = Column(Text)
 
 class PotholeDetail(db.Model):

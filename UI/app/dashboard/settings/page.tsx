@@ -72,7 +72,7 @@ export default function SettingsPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="receiver">Target Authority Email</Label>
-                <Input id="receiver" placeholder="police@city.gov" defaultValue="city.traffic@aurangabad.gov.in" />
+                <Input id="receiver" placeholder="police@city.gov" defaultValue="shloktechnical@gmail.com" />
               </div>
             </div>
           </CardContent>

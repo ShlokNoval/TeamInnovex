@@ -32,8 +32,11 @@ export function VideoPlayer({ file }: VideoPlayerProps) {
     // Connect WebSocket
     wsService.connect()
     const handleFrame = (response: AnnotatedFrameResponse) => {
-      // In a real app, we'd overlay this on the canvas. 
-      // For the mock, the backend sends back the annotated frame as base64.
+      // Diagnostic logging to confirm frame arrival in SOC Terminal
+      if (frameCountRef.current === 0) {
+        console.log("[VideoPlayer] First frame received from backend.");
+      }
+
       setAnnotatedFrame(response.annotatedFrame)
       
       // Calculate FPS

@@ -7,28 +7,7 @@ import { ArrowRight, Activity, ShieldAlert, Cpu, Network, Lock, Zap, Search, Shi
 import { motion } from "framer-motion"
 import { useEffect, useState } from "react"
 
-const FAKE_LOGS = [
-  "[SYS] Neural mesh initialized.",
-  "[INFERENCE] Awaiting RTSP stream...",
-  "[CAM_01] Connected. 30 FPS.",
-  "[ALERT] Type: Pothole || Conf: 98.2%",
-  "[TRACKING] Obj_842 -> Coordinates logged.",
-  "[CAM_02] Analyzing traffic flow...",
-  "[ALERT] Type: Animal || Conf: 85.1%",
-  "[SYS] Authority webhook dispatched.",
-  "[INFERENCE] Nominal operations.",
-]
-
 export default function LandingPage() {
-  const [logIndex, setLogIndex] = useState(0)
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLogIndex(prev => (prev + 1) % FAKE_LOGS.length)
-    }, 2500)
-    return () => clearInterval(interval)
-  }, [])
-
   return (
     <div className="min-h-screen bg-black/95 relative overflow-hidden flex flex-col font-sans selection:bg-primary/30 text-white">
       {/* Grid Pattern Overlay */}
@@ -53,14 +32,10 @@ export default function LandingPage() {
         </motion.div>
         
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="text-white/40 hover:text-white transition-colors">
-            <Search className="w-5 h-5" />
-          </Button>
-          <div className="h-4 w-px bg-white/10 mx-1" />
-          <Link href="/dashboard">
-            <Button variant="outline" className="h-10 border-white/10 bg-white/5 hover:bg-white/10 text-white font-mono text-xs tracking-widest gap-2 rounded-full px-5 transition-all active:scale-95 shadow-[0_0_15px_rgba(var(--primary-rgb),0.1)]">
-              <Lock className="w-3.5 h-3.5" />
-              OPERATOR LOGS
+          <Link href="/login">
+            <Button variant="outline" className="h-10 border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-mono text-xs tracking-widest gap-2 rounded-full px-5 transition-all active:scale-95 shadow-[0_0_15px_rgba(var(--primary-rgb),0.1)]">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              AUTHORITY LOGIN
             </Button>
           </Link>
         </div>
@@ -98,7 +73,7 @@ export default function LandingPage() {
             </p>
           </motion.div>
 
-          {/* Technical Info Row (Inspired by reference) */}
+          {/* Technical Info Row */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -118,7 +93,7 @@ export default function LandingPage() {
             ))}
           </motion.div>
 
-          {/* Dual Action CTA (Replaces confusing input box) */}
+          {/* Dual Action CTA */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -159,7 +134,7 @@ export default function LandingPage() {
           </motion.div>
         </div>
 
-        {/* Intelligence Modules Section (Redesigned 'Neural Mesh Capabilities') */}
+        {/* Intelligence Modules Section */}
         <div className="w-full space-y-16">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div className="space-y-2">
@@ -192,29 +167,12 @@ export default function LandingPage() {
             <div className="md:col-span-8 group relative h-[500px]">
               <div className="absolute inset-0 bg-primary/5 rounded-3xl group-hover:bg-primary/10 transition-colors pointer-events-none border border-white/5 shadow-inner" />
               <div className="absolute inset-0 rounded-3xl overflow-hidden">
-                {/* Simulated Scanning Line */}
                 <motion.div 
                   animate={{ top: ["0%", "100%", "0%"] }}
                   transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
                   className="absolute left-0 right-0 h-10 bg-linear-to-b from-transparent via-primary/10 to-transparent z-20 pointer-events-none"
                 />
-                
-                {/* Tech Grid Background */}
                 <div className="absolute inset-0 bg-size-[20px_20px] bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] opacity-20" />
-                
-                {/* Moving Data Points */}
-                {[...Array(6)].map((_, i) => (
-                  <motion.div
-                    key={i}
-                    animate={{ 
-                      x: [Math.random() * 100 + "%", Math.random() * 100 + "%"],
-                      y: [Math.random() * 100 + "%", Math.random() * 100 + "%"],
-                      opacity: [0, 1, 0]
-                    }}
-                    transition={{ duration: 5 + i, repeat: Infinity, ease: "easeInOut" }}
-                    className="absolute w-1 h-1 bg-primary rounded-full blur-[1px]"
-                  />
-                ))}
               </div>
 
               <div className="relative h-full flex flex-col p-10 justify-between">
@@ -281,22 +239,18 @@ export default function LandingPage() {
                         </div>
                     </div>
                   </div>
-                  
-                  {/* Subtle Background Icon */}
                   <div className="absolute bottom-4 right-4 opacity-[0.03] pointer-events-none group-hover:opacity-[0.08] transition-opacity">
                     <Shield className="w-32 h-32" />
                   </div>
                </div>
             </div>
 
-            {/* Multi-Component Bottom Card: Intelligence Feed */}
+            {/* Bottom Card: Trajectory Tracking */}
             <div className="md:col-span-12 group relative">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                
-                {/* Animal Tracking Minor Card */}
-                <div className="glass-card rounded-3xl p-8 border border-white/5 hover:border-indigo-500/30 transition-all relative overflow-hidden group/card">
+                <div className="glass-card rounded-3xl p-8 border border-white/5 hover:border-indigo-500/30 transition-all relative overflow-hidden group/card shadow-2xl bg-black/20">
                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none group-hover/card:bg-indigo-500/10 transition-colors" />
-                   <div className="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center mb-6 text-indigo-400">
+                   <div className="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center mb-6 text-indigo-400 border border-indigo-500/20">
                       <Activity className="w-6 h-6" />
                    </div>
                    <h3 className="text-xl font-bold mb-3">Trajectory Tracking</h3>
@@ -304,49 +258,12 @@ export default function LandingPage() {
                       Predicts accident risks by analyzing wildlife and stray animal pathways in high-speed zones.
                    </p>
                 </div>
-
-                {/* Integration Log View (Shifted to a better secondary box) */}
-                <div className="md:col-span-2 glass-card rounded-3xl border border-white/5 overflow-hidden flex flex-col bg-black/40">
-                  <div className="flex items-center px-6 py-4 border-b border-white/5 justify-between">
-                    <div className="flex gap-1.5">
-                      <div className="w-2 h-2 rounded-full bg-red-500/50" />
-                      <div className="w-2 h-2 rounded-full bg-yellow-500/50" />
-                      <div className="w-2 h-2 rounded-full bg-green-500/50" />
-                    </div>
-                    <div className="font-mono text-[9px] text-white/40 tracking-[0.2em] uppercase flex items-center gap-2">
-                      <span className="w-2 h-2 bg-primary rounded-full animate-ping" />
-                      Primary_Inference_Stream_Live
-                    </div>
-                    <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/20">
-                       <ChevronRight className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="p-6 font-mono text-[10px] leading-relaxed text-white/20 grid grid-cols-1 md:grid-cols-2 gap-x-12">
-                    <div className="space-y-1">
-                      {FAKE_LOGS.slice(0, 4).map((log, i) => (
-                        <motion.div 
-                          key={i}
-                          animate={{ opacity: i <= logIndex ? 1 : 0.2 }}
-                          className={log.includes("ALERT") ? "text-primary font-bold" : ""}
-                        >
-                          {`# [${i}] > ${log}`}
-                        </motion.div>
-                      ))}
-                    </div>
-                    <div className="space-y-1 hidden md:block">
-                      {FAKE_LOGS.slice(4, 8).map((log, i) => (
-                        <motion.div 
-                          key={i+4}
-                          animate={{ opacity: (i+4) <= logIndex ? 1 : 0.2 }}
-                          className={log.includes("ALERT") ? "text-primary font-bold" : ""}
-                        >
-                          {`# [${i+4}] > ${log}`}
-                        </motion.div>
-                      ))}
-                    </div>
+                <div className="md:col-span-2 glass-card rounded-3xl p-8 border border-white/5 bg-linear-to-br from-white/[0.02] to-transparent flex items-center justify-center min-h-[160px]">
+                  <div className="text-center space-y-2">
+                    <div className="text-[10px] font-mono text-white/20 tracking-[0.4em] uppercase">Status Check</div>
+                    <div className="text-2xl font-black text-white/40 tracking-tighter">ALL MODULES OPERATIONAL</div>
                   </div>
                 </div>
-
               </div>
             </div>
           </motion.div>
@@ -368,4 +285,3 @@ export default function LandingPage() {
     </div>
   )
 }
-

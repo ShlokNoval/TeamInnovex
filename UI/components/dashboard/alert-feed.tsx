@@ -117,8 +117,8 @@ export function AlertFeed() {
                       </div>
                       
                       <div className="text-sm font-mono text-slate-400 grid grid-cols-2 gap-x-4 gap-y-2 mt-1 bg-slate-950/50 p-2.5 rounded-md border border-slate-800/50">
-                        <div className="truncate flex items-center gap-1.5" title={alert.camera?.name || alert.camera_id}>
-                          <span className="text-indigo-400">LOC:</span> {alert.camera?.name || alert.camera_id}
+                        <div className="truncate flex items-center gap-1.5" title={alert.latitude ? `${alert.latitude.toFixed(4)}, ${alert.longitude?.toFixed(4)}` : alert.camera?.name || alert.camera_id}>
+                          <span className="text-indigo-400">{alert.latitude ? 'GPS:' : 'LOC:'}</span> {alert.latitude ? `${alert.latitude.toFixed(4)}, ${alert.longitude?.toFixed(4)}` : alert.camera?.name || alert.camera_id}
                         </div>
                         <div className="text-right flex items-center justify-end gap-1.5">
                           <span className="text-emerald-400">T-MINUS:</span> {formatTimeAgo(alert.created_at)}

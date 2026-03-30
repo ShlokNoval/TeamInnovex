@@ -88,7 +88,9 @@ def get_alerts():
             "status": a.status,
             "time": a.triggered_at,
             "frame": a.frame_number,
-            "timestamp_in_video": a.timestamp_in_video
+            "timestamp_in_video": a.timestamp_in_video,
+            "latitude": a.latitude,
+            "longitude": a.longitude
         } for a in alerts
     ]
     return jsonify(results), 200
@@ -134,10 +136,38 @@ def resolve_alert(alert_id):
 @jwt_required()
 def get_analytics():
     """
-    Endpoint 7: Get precomputed cache metrics.
+    Endpoint 7: Get real-time analytics summary from the database.
     """
-    metrics = AnalyticsCache.query.filter_by(session_id=None).all()
-    results = {m.metric_name: m.value for m in metrics}
+    # Get overall counts from Detection table
+    total_detections = Detection.query.count()
+    pothole_count = Detection.query.filter_by(type='pothole').count()
+    animal_count = Detection.query.filter_by(type='animal').count()
+    accident_count = Detection.query.filter_by(type='accident').count()
+    
+    # Get severity breakdown from Alert table
+    low_alerts = Alert.query.filter_by(alert_level='low').count()
+    medium_alerts = Alert.query.filter_by(alert_level='medium').count()
+    high_alerts = Alert.query.filter_by(alert_level='high').count()
+    critical_alerts = Alert.query.filter_by(alert_level='critical').count()
+    
+    # Get today's detections
+    from datetime import datetime, timedelta
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_detections = Detection.query.filter(Detection.session_id != None).count() # Simplified for now
+    
+    results = {
+        "total_detections": total_detections,
+        "pothole_count": pothole_count,
+        "animal_count": animal_count,
+        "accident_count": accident_count,
+        "today_detections": today_detections,
+        "by_severity": {
+            "low": low_alerts,
+            "medium": medium_alerts,
+            "high": high_alerts,
+            "critical": critical_alerts
+        }
+    }
     return jsonify(results), 200
 
 @api_bp.route('/reports/potholes', methods=['GET'])

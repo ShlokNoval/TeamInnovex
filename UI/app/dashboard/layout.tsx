@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 import { LayoutDashboard, AlertCircle, Map, BarChart3, Camera as CameraIcon, Settings, Bell, Search, Menu, ShieldAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 
@@ -125,16 +125,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56 bg-slate-900 border-slate-800 text-slate-200" align="end">
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none text-slate-100">Authority Admin</p>
-                    <p className="text-xs leading-none text-slate-500">ops@divyadrishti.gov</p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-slate-800" />
-                <DropdownMenuItem className="focus:bg-indigo-500/20 focus:text-indigo-300 cursor-pointer text-slate-300">Auth Profile</DropdownMenuItem>
-                <DropdownMenuItem className="focus:bg-indigo-500/20 focus:text-indigo-300 cursor-pointer text-slate-300">Export Global Logs</DropdownMenuItem>
-                <DropdownMenuItem className="focus:bg-red-500/20 focus:text-red-400 cursor-pointer text-red-500/80">Terminate Session</DropdownMenuItem>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none text-slate-100">Authority Admin</p>
+                      <p className="text-xs leading-none text-slate-500">ops@divyadrishti.gov</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator className="bg-slate-800" />
+                  <DropdownMenuItem className="focus:bg-indigo-500/20 focus:text-indigo-300 cursor-pointer text-slate-300">Auth Profile</DropdownMenuItem>
+                  <DropdownMenuItem className="focus:bg-indigo-500/20 focus:text-indigo-300 cursor-pointer text-slate-300">Export Global Logs</DropdownMenuItem>
+                  <DropdownMenuItem className="focus:bg-red-500/20 focus:text-red-400 cursor-pointer text-red-500/80">Terminate Session</DropdownMenuItem>
+                </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

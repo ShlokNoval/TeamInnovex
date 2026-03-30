@@ -20,8 +20,21 @@ def create_app():
     
     with app.app_context():
         # Import models here so SQLAlchemy knows about them
-        from database import models
+        from database.models import UploadSession
         db.create_all()
+        
+        # Ensure a default session for live streaming exists to prevent FK integrity errors
+        if not UploadSession.query.get('live-session-001'):
+            live_session = UploadSession(
+                id='live-session-001',
+                filename='LIVESTREAM_NODELINK',
+                file_type='video',
+                status='processing',
+                label='Neural Node Live Link'
+            )
+            db.session.add(live_session)
+            db.session.commit()
+            print("[Backend] Default live session created: live-session-001")
         
     # Register API blueprints
     from api.routes import api_bp
@@ -39,4 +52,5 @@ app = create_app()
 if __name__ == "__main__":
     import os
     port = int(os.environ.get('PORT', 8000))
-    socketio.run(app, debug=True, host='0.0.0.0', port=port)
+    socketio.run(app, debug=True, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
+

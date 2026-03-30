@@ -146,3 +146,56 @@ def process_upload(session_id):
         session.status = 'completed'
         session.processing_end = datetime.datetime.utcnow()
         db.session.commit()
+
+def process_live_frame(session_id, frame_b64, location=None):
+    """
+    NEW: Processes a single real-time frame from the mobile stream.
+    Directly triggers the AI pipeline (Inference -> Fusion -> Alert).
+    """
+    from main import app
+    with app.app_context():
+        # Layer 3: Simulation (In production, replace with YOLO session inference)
+        hazards_detected = random.choices(
+            ['pothole', 'animal', 'accident', 'none'], 
+            weights=[5, 5, 2, 88] # Lower frequency for live stream simulation
+        )[0]
+        
+        # Robust session checking: If the session doesn't exist, use the default live session
+        session = UploadSession.query.get(session_id)
+        if not session:
+            session_id = 'live-session-001'
+        
+        if hazards_detected == 'none':
+            return {"detections": [], "alert_triggered": False}
+
+        # Create localized detection
+        lat = location.get('lat') if location else None
+        lng = location.get('lng') if location else None
+        
+        detection = Detection(
+            session_id=session_id,
+            type=hazards_detected,
+            confidence=random.uniform(0.75, 0.95),
+            bbox={"x": 100, "y": 100, "w": 200, "h": 200},
+            latitude=lat,
+            longitude=lng
+        )
+        db.session.add(detection)
+        db.session.commit()
+
+        # Layer 5: Fusion 
+        risk_score, combined_risk_flag = compute_multi_hazard_risk(detection, session_id, 0)
+        detection.risk_score = risk_score
+        
+        # Layer 6: Alert Trigger (Pass location to AlertManager)
+        alert = handle_alerts(detection, latitude=lat, longitude=lng)
+        
+        db.session.commit()
+        return {
+            "detections": [{
+                "class": hazards_detected, 
+                "confidence": detection.confidence,
+                "bbox": [100, 100, 200, 200]
+            }], 
+            "alert_triggered": alert is not None
+        }

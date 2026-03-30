@@ -39,8 +39,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Redirect logic
-    const publicPaths = ['/login', '/', '/stream'];
-    if (!isLoading && !token && !publicPaths.includes(pathname)) {
+    const publicPaths = ['/login', '/', '/stream', '/testing'];
+    const isPublic = publicPaths.some(p => pathname === p || (p !== '/' && pathname.startsWith(p)));
+    if (!isLoading && !token && !isPublic) {
       router.push('/login');
     }
   }, [token, isLoading, pathname, router]);

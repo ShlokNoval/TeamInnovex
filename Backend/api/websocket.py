@@ -16,19 +16,22 @@ def handle_raw_frame(data):
     Receives a raw Base64 camera frame from the mobile browser.
     Broadcasts it back as an annotated frame (AI engine will replace this stub).
     """
-    # For now, echo back as-is so the dashboard still gets a feed
-    # When the AI Engine is integrated, call: process_frame(data['frame']) here
+    from services.ai_engine import process_live_frame
+    # Process the frame through the AI Engine
+    result = process_live_frame('live-session-001', data.get('frame'), data.get('location'))
+    
+    # Explicitly broadcast to all connected clients (Neural Dashboard on PC)
     socketio.emit('frame_stream', {
         'annotatedFrame': data.get('frame', ''),
-        'detections': [],
+        'detections': result.get('detections', []),
         'timestamp': data.get('timestamp', 0),
         'location': data.get('location', None)
-    })
+    }, broadcast=True)
 
 def broadcast_alert(alert_data):
     """Called by backend services to emit an alert to the React Admin Panel."""
-    socketio.emit('new_alert', alert_data)
+    socketio.emit('new_alert', alert_data, broadcast=True)
 
 def stream_annotated_frame(frame_data):
     """Called by backend services to stream base64 annotated frame back to Testing Dashboard."""
-    socketio.emit('frame_stream', frame_data)
+    socketio.emit('frame_stream', frame_data, broadcast=True)

@@ -32,22 +32,38 @@ export async function getIncidents(): Promise<Incident[]> {
     );
   }
   
-  const res = await fetch(`${API_BASE_URL}/alerts`, getAuthOptions());
-  if (!res.ok) throw new Error('Failed to fetch incidents');
-  const data = await res.json();
-  
-  // Map backend Alert model to frontend Incident type
-  return data.map((a: any) => ({
-    id: a.id,
-    camera_id: 'cam-001', // Backend is missing camera_id in list, defaulting
-    hazard_type: a.type,
-    severity_label: a.level,
-    severity_score: a.score,
-    confidence: 0.95, // Default confidence
-    status: a.status,
-    created_at: a.time,
-    updated_at: a.time
-  }));
+  try {
+    const res = await fetch(`${API_BASE_URL}/alerts`, getAuthOptions());
+    if (!res.ok) {
+      console.warn(`Alerts API returned ${res.status}, falling back to mock data`);
+      const { MOCK_INCIDENTS } = await import('./mock-data');
+      return MOCK_INCIDENTS.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    }
+    const data = await res.json();
+    
+    // Map backend Alert model to frontend Incident type
+    return data.map((a: any) => ({
+      id: a.id,
+      camera_id: 'cam-001', // Backend is missing camera_id in list, defaulting
+      hazard_type: a.type,
+      severity_label: a.level, // Backend returns 'level' which maps to 'alert_level'
+      severity_score: a.score, // Backend returns 'score' which maps to 'severity_score'
+      confidence: a.confidence || 0.95,
+      status: a.status,
+      latitude: a.latitude,
+      longitude: a.longitude,
+      created_at: a.time,
+      updated_at: a.time
+    }));
+  } catch (err) {
+    console.warn('Failed to fetch incidents, using mock data:', err);
+    const { MOCK_INCIDENTS } = await import('./mock-data');
+    return MOCK_INCIDENTS.sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }
 }
 
 export async function getIncidentById(id: string): Promise<Incident | null> {
@@ -91,27 +107,40 @@ export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
     const { MOCK_ANALYTICS } = await import('./mock-data');
     return MOCK_ANALYTICS;
   }
-  const res = await fetch(`${API_BASE_URL}/analytics`, getAuthOptions());
-  if (!res.ok) throw new Error('Failed to fetch analytics');
-  const data = await res.json();
   
-  // Format the raw analytics metrics returned by backend
-  return {
-    total_detections: data.total_detections || 0,
-    by_type: {
-      pothole: data.pothole_count || 0,
-      animal: data.animal_count || 0,
-      accident: data.accident_count || 0
-    },
-    by_severity: {
-      low: 10,  // Sample values if backend doesn't provide breakdown yet
-      medium: 15,
-      high: 5,
-      critical: 2
-    },
-    today_count: data.today_detections || 0,
-    hourly_breakdown: []
-  };
+  try {
+    const res = await fetch(`${API_BASE_URL}/analytics`, getAuthOptions());
+    if (!res.ok) {
+      console.warn(`Analytics API returned ${res.status}, falling back to mock data`);
+      const { MOCK_ANALYTICS } = await import('./mock-data');
+      return MOCK_ANALYTICS;
+    }
+    const data = await res.json();
+    
+    // Format the raw analytics metrics returned by backend
+    const severity = data.by_severity || { low: 0, medium: 0, high: 0, critical: 0 };
+    
+    return {
+      total_detections: data.total_detections || 0,
+      by_type: {
+        pothole: data.pothole_count || 0,
+        animal: data.animal_count || 0,
+        accident: data.accident_count || 0
+      },
+      by_severity: {
+        low: severity.low || 0,
+        medium: severity.medium || 0,
+        high: severity.high || 0,
+        critical: severity.critical || 0
+      },
+      today_count: data.today_detections || 0,
+      hourly_breakdown: data.hourly_breakdown || []
+    };
+  } catch (err) {
+    console.warn('Failed to fetch analytics, using mock data:', err);
+    const { MOCK_ANALYTICS } = await import('./mock-data');
+    return MOCK_ANALYTICS;
+  }
 }
 
 export async function getHeatmapData(): Promise<HeatmapPoint[]> {

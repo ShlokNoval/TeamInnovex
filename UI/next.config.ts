@@ -1,20 +1,28 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ['hosea-requisitionary-unawares.ngrok-free.dev'],
+  // Use a more robust list of allowed origins for development
+  allowedDevOrigins: [
+    'localhost:3000', 
+    '127.0.0.1:3000', 
+    'hosea-requisitionary-unawares.ngrok-free.dev',
+    '*.ngrok-free.dev',
+    'ngrok-free.dev'
+  ],
   async rewrites() {
     return {
       beforeFiles: [
-        // Proxy WebSocket connections to Flask backend
+        // Standard Socket.IO path proxy (catches /socket.io/, /socket.io/1/, etc.)
         {
-          source: '/ws/:path*',
-          destination: 'http://localhost:8000/ws/:path*'
+          source: '/socket.io/:path*',
+          destination: 'http://localhost:8000/socket.io/:path*'
         },
+        // Root /socket.io catch (matches requests without trailing slash)
         {
-          source: '/ws',
-          destination: 'http://localhost:8000/ws'
+          source: '/socket.io',
+          destination: 'http://localhost:8000/socket.io/'
         },
-        // Proxy Auth API to Flask backend (must come before /api catch-all)
+        // Proxy Auth API to Flask backend
         {
           source: '/api/auth/:path*',
           destination: 'http://localhost:8000/api/auth/:path*'
@@ -50,4 +58,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-
