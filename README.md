@@ -1,58 +1,88 @@
-# DIVYADRISHTI - AI-Powered Road Hazard Detection System
+# DivyaDrishti — AI-Powered Road Hazard Detection System
 
-Divyadrishti (Divine Vision) is an advanced, multi-modal Neural Security Operations Center (SOC) designed to detect, track, and analyze road hazards in real-time. This repository houses the unified frontend, backend, and AI analysis engine developed during the 24-hour hackathon.
+## 🏗️ Monorepo Architecture
+
+This repository is organized into **3 independent modules** to ensure clean separation of concerns and zero merge conflicts between teams.
+
+```
+TeamInnovex/
+├── UI/              ← Next.js Frontend (Neural SOC Dashboard)
+├── Backend/         ← FastAPI Python Backend (REST API + WebSocket)
+├── AI_Engine/       ← YOLOv8 AI Detection Engine
+├── README.md
+└── COMMIT.md
+```
 
 ---
 
-## 🏗️ Architecture Stack
-*   **Frontend**: Next.js 14, React, Tailwind CSS, shadcn/ui, Leaflet Heatmaps
-*   **AI Engine**: Python, FastAPI, Ultralytics YOLOv8, OpenCV
-*   **Database**: Neon PostgreSQL, Prisma ORM
-*   **Real-time Layer**: WebSocket / HTTP Polling Frame Relay
+## 🚀 Module Overview
 
----
+### 📱 UI — Neural Command Center
+**Owner**: Shlok | **Stack**: Next.js 16, TypeScript, TailwindCSS, Leaflet
+- Real-time mobile camera uplink via Ngrok tunnel
+- Live AI detection visualization with SOC-grade UI
+- Admin dashboard with incident management & geolocation tracking
 
-## 🖥️ UI Core (Phase 1 Completed)
-
-The `ui-core` frontend is 100% production-ready and fully stylized.
-
-### Features Built:
-1.  **Mobile Node Uplink (`/stream`)**: 
-    - Hardware-accelerated Canvas frame extraction.
-    - Smart orientation correction (tripod rotation support).
-    - High-frequency HTTP relay bypassing traditional Ngrok WebSocket blockage.
-2.  **Neural SOC Command Center (`/dashboard`)**:
-    - Deep-space glassmorphic dark theme.
-    - Active Incident Feed with real-time deduplication and neon severity alerts.
-    - Priority Index (PI) compliant payload mappings.
-3.  **CartoDB Geo-Spatial Heatmap**:
-    - Dark-mode satellite maps showing active camera nodes and risk zones.
-4.  **Local Simulation Testing (`/testing`)**:
-    - Pre-recorded MP4 batch upload testing capabilities.
-
-## 🚀 How to Run the Frontend
-
+**To run:**
 ```bash
-cd web-app
+cd UI
 npm install
-npm run dev
+node mock-backend.mjs   # Terminal 1 (mock relay)
+npm run dev             # Terminal 2 (Next.js)
+ngrok http 3000         # Terminal 3 (mobile tunnel)
 ```
-
-For testing the mobile node on a different network:
-```bash
-# In an external terminal
-ngrok http 3000 --host-header=rewrite
-```
-
-### Mock Mode Toggle
-The frontend currently simulates the AI engine so judges can view the UI without the Python server running.
-When the AI team successfully deploys FastAPI:
-1. Open `web-app/lib/api.ts` and `web-app/lib/websocket.ts`.
-2. Toggle `USE_MOCK = false`.
-3. The Next.js API relay will automatically begin pointing towards `localhost:8000`.
 
 ---
 
-## 🤖 Backend Core & AI Engine (Pending)
-*   **Branch**: `backend-core` & `ai-analysis-engine`.
-*   **Tasks remaining**: Finalizing YOLOv8 inference scripts, Postgres insertions, and exposing the `/api/stream` FASTAPI route.
+### ⚙️ Backend — FastAPI Server
+**Owner**: Backend Team | **Stack**: Python, FastAPI, SQLite/PostgreSQL
+- REST API for incidents, cameras, and analytics
+- WebSocket relay for real-time AI detections
+- Government reporting endpoints
+
+**To run:**
+```bash
+cd Backend
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+---
+
+### 🤖 AI_Engine — YOLOv8 Detection Engine
+**Owner**: AI Team | **Stack**: Python, YOLOv8, OpenCV
+- Real-time hazard detection (potholes, stray animals, accidents)
+- Frame ingestion from mobile camera nodes
+- Confidence scoring and bounding box annotation
+
+**To run:**
+```bash
+cd AI_Engine
+pip install -r requirements.txt
+python main.py
+```
+
+---
+
+## 🔗 Integration Checklist (Final Merge)
+
+When all 3 modules are complete, enable live integration:
+
+1. **Start Backend** on port `8000`
+2. **Start AI Engine** (it will connect to the Backend)
+3. In `UI/lib/api.ts` — set `NEXT_PUBLIC_USE_MOCK=false`
+4. In `UI/lib/websocket.ts` — set `USE_MOCK = false`
+5. **Start UI** on port `3000`
+
+---
+
+## 🌿 Branch Strategy
+
+| Branch | Purpose |
+|---|---|
+| `main` | Stable, demo-ready code |
+| `ui-core` | Frontend development |
+| `backend-core` | Backend development |
+| `ai-analysis-engine` | AI Engine development |
+
+**Final merge order**: All feature branches → `ui-core` → `main`

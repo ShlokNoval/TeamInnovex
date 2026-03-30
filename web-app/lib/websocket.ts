@@ -90,14 +90,18 @@ class WebSocketService {
     }
   }
 
-  sendFrame(base64Frame: string, timestamp: number) {
+  sendFrame(base64Frame: string, timestamp: number, location?: { lat: number, lng: number }) {
     if (USE_MOCK) return; 
     
-    // Send standard HTTP payload
+    // Send standard HTTP payload with optional location metadata
     fetch('/api/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ frame: base64Frame, timestamp })
+      body: JSON.stringify({ 
+        frame: base64Frame, 
+        timestamp,
+        location 
+      })
     }).catch(e => console.error("Send failed", e));
   }
 

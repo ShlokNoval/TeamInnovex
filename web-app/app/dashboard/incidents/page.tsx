@@ -11,9 +11,19 @@ import { Button } from "@/components/ui/button"
 import { HazardIcon } from "@/components/shared/hazard-icon"
 import { SeverityBadge } from "@/components/shared/severity-badge"
 import { StatusBadge } from "@/components/shared/status-badge"
-import { Search, SlidersHorizontal, ArrowUpDown } from "lucide-react"
+import { Search, SlidersHorizontal, ArrowUpDown, MoreVertical, CheckCircle2, Clock, Hammer, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { Skeleton } from "@/components/ui/skeleton"
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuLabel, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu"
+import { updateIncidentStatus } from "@/lib/api"
+import { toast } from "sonner"
 
 export default function IncidentsPage() {
   const [incidents, setIncidents] = useState<Incident[]>([])
@@ -43,6 +53,16 @@ export default function IncidentsPage() {
       i.hazard_type.toLowerCase().includes(lower)
     ))
   }, [search, incidents])
+
+  const handleStatusUpdate = async (id: string, status: string) => {
+    try {
+      const updated = await updateIncidentStatus(id, status)
+      setIncidents(prev => prev.map(i => i.id === id ? updated : i))
+      toast.success(`Incident marked as ${status}`)
+    } catch (err) {
+      toast.error("Failed to update status")
+    }
+  }
 
   return (
     <div className="p-4 md:p-8 pt-6 h-full flex flex-col">
@@ -141,9 +161,33 @@ export default function IncidentsPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Link href={`/dashboard/incidents/${incident.id}`}>
-                      <Button variant="ghost" size="sm">View Details</Button>
-                    </Link>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger className="p-2 hover:bg-primary/10 hover:text-primary rounded-md transition-colors">
+                        <MoreVertical className="h-4 w-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48 bg-slate-950 border-white/10 text-white">
+                        <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-widest px-2 py-1.5">Manage Incident</DropdownMenuLabel>
+                        <DropdownMenuSeparator className="bg-white/5" />
+                        <DropdownMenuItem onClick={() => handleStatusUpdate(incident.id, 'new')} className="text-xs hover:bg-primary/20">
+                          <AlertTriangle className="mr-2 h-3.5 w-3.5 text-amber-500" /> Mark as New
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleStatusUpdate(incident.id, 'assigned')} className="text-xs hover:bg-primary/20">
+                          <Clock className="mr-2 h-3.5 w-3.5 text-blue-400" /> Assign Units
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleStatusUpdate(incident.id, 'in-progress')} className="text-xs hover:bg-primary/20">
+                          <Hammer className="mr-2 h-3.5 w-3.5 text-orange-400" /> In Progress
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleStatusUpdate(incident.id, 'resolved')} className="text-xs hover:bg-primary/20 font-bold text-green-400">
+                          <CheckCircle2 className="mr-2 h-3.5 w-3.5" /> Mark Resolved
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-white/5" />
+                        <Link href={`/dashboard/incidents/${incident.id}`}>
+                          <DropdownMenuItem className="text-xs hover:bg-primary/20">
+                            View Full Dossier
+                          </DropdownMenuItem>
+                        </Link>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))

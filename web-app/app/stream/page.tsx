@@ -15,10 +15,12 @@ export default function MobileStreamPage() {
   const [latency, setLatency] = useState(0)
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(90) // Default to 90 for tripod
   const [cameraError, setCameraError] = useState<string | null>(null)
+  const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null)
   
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const locationWatchRef = useRef<number | null>(null)
 
   // Configure constraints based on quality
   const getConstraints = () => {
@@ -104,8 +106,8 @@ export default function MobileStreamPage() {
         // Convert to Base64
         const base64 = canvas.toDataURL('image/jpeg', 0.4) // Reduced from 0.6 to 0.4 for speed
         
-        // Send via WebSocket
-        wsService.sendFrame(base64, Date.now())
+        // Send via WebSocket (including current location)
+        wsService.sendFrame(base64, Date.now(), location || undefined)
         
         // Calculate FPS
         frameCount++
@@ -122,7 +124,23 @@ export default function MobileStreamPage() {
   }
 
   useEffect(() => {
+    // Start Camera
     startCamera()
+
+    // Start Location Tracking (Auto-reports to government/admin)
+    if ("geolocation" in navigator) {
+      locationWatchRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          setLocation({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude
+          })
+        },
+        (err) => console.error("Location error", err),
+        { enableHighAccuracy: true }
+      )
+    }
+
     // Restart streaming loop if quality or rotation changes while active
     if (isStreaming) {
        toggleStream()
@@ -130,6 +148,7 @@ export default function MobileStreamPage() {
     }
     return () => {
       if (streamIntervalRef.current) clearInterval(streamIntervalRef.current)
+      if (locationWatchRef.current) navigator.geolocation.clearWatch(locationWatchRef.current)
     }
   }, [streamQuality, rotation])
 
@@ -142,6 +161,14 @@ export default function MobileStreamPage() {
           <span className="text-[10px] font-bold tracking-widest">{isStreaming ? "STREAMING" : "STANDBY"}</span>
         </div>
         <div className="flex gap-4">
+           {location && (
+             <div className="flex flex-col items-end mr-2">
+                <span className="text-[8px] text-white/30 uppercase tracking-widest text-primary">GPS ACTIVE</span>
+                <span className="text-[9px] font-bold font-mono">
+                  {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
+                </span>
+             </div>
+           )}
            <div className="flex flex-col items-end">
               <span className="text-[8px] text-white/30">FPS</span>
               <span className="text-xs font-bold font-mono text-primary">{fps}</span>

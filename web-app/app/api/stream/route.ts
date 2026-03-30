@@ -11,52 +11,54 @@ declare global {
 export async function POST(req: Request) {
   try {
     const data = await req.json();
+    const nodeLocation = data.location;
     
     // Initialize queue if needed
     if (!globalThis._alertQueue) globalThis._alertQueue = [];
 
-    // Simulate AI Detection randomly
+    // Simulate AI Detection randomly (or handle real detections from AI engine)
     const hasDetection = Math.random() > 0.8;
     const detections = [];
     if (hasDetection) {
-      const bbox = [100, 100, 200, 200];
-      const cls = Math.random() > 0.5 ? "pothole" : (Math.random() > 0.5 ? "animal" : "accident");
-      const sev = Math.random() > 0.7 ? "high" : "medium";
-      const conf = 0.85 + (Math.random() * 0.14);
-      
-      detections.push({
-        bbox,
-        class: cls,
-        confidence: conf,
-        severity: sev
+      const type = ['pothole', 'animal', 'accident'][Math.floor(Math.random() * 3)];
+      const detection = {
+        bbox: [100, 100, 200, 200],
+        class: type,
+        confidence: 0.91,
+        severity: 'medium'
+      };
+      detections.push(detection);
+
+      // Add to government alert queue with real-time location
+      globalThis._alertQueue.push({
+        id: `inc-live-${Date.now()}`,
+        hazard_type: type as any,
+        severity_score: 85,
+        severity_label: 'high',
+        status: 'new',
+        lat: nodeLocation ? nodeLocation.lat : (28.6139 + (Math.random() - 0.5) * 0.01),
+        lng: nodeLocation ? nodeLocation.lng : (77.2090 + (Math.random() - 0.5) * 0.01),
+        created_at: new Date().toISOString(),
+        camera: {
+          id: 'cam-live-mobile',
+          name: 'Mobile Neural Node',
+          location_name: nodeLocation ? `GPS: ${nodeLocation.lat.toFixed(4)}, ${nodeLocation.lng.toFixed(4)}` : 'Remote Uplink'
+        }
       });
 
-      // Generate a structured incident object for the alert feed
-      globalThis._alertQueue.push({
-        id: `mock-rt-${Date.now()}-${Math.floor(Math.random()*100)}`,
-        camera_id: "NODE_0842",
-        hazard_type: cls,
-        severity_label: sev,
-        severity_score: Math.floor(conf * 100),
-        confidence: conf,
-        status: "new",
-        created_at: new Date().toISOString(),
-        metadata: { bbox }
-      });
-      // Keep only last 20 alerts to prevent memory leaks and allow multiple clients to poll
-      if (globalThis._alertQueue.length > 20) {
-        globalThis._alertQueue.shift();
-      }
+      // Keep queue manageable
+      if (globalThis._alertQueue.length > 50) globalThis._alertQueue.shift();
     }
 
     // Store in global memory
     globalThis._latestFrameData = {
-      annotatedFrame: data.frame, // Bouncing the frame back
+      annotatedFrame: data.frame, 
       detections,
-      timestamp: data.timestamp
+      timestamp: data.timestamp,
+      location: nodeLocation // Pass the location back to the dashboard too
     };
 
-    console.log(`[API] Received frame. Queue size: ${globalThis._alertQueue.length}. Detect: ${hasDetection}`);
+    console.log(`[API] Received frame. GPS: ${nodeLocation ? 'ACTIVE' : 'OFF'}. Detect: ${hasDetection}`);
 
     return NextResponse.json({ success: true });
   } catch (error) {
