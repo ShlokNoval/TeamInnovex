@@ -29,6 +29,7 @@ const io = new SocketIOServer(httpServer, {
 
 // ─── In-Memory Data Store ───────────────────────────────────────────────────
 const incidents = [];
+global.incidentCooldowns = new Map(); // Using Map for atomic persistence 
 const cameras = [
   {
     id: 'cam-mobile',
@@ -47,9 +48,9 @@ let aiConnected = false;
 let aiReconnectTimer = null;
 
 // Pending frame callbacks: when we send a frame to AI, we store a callback
-// to handle the response. Since the AI Engine processes frames sequentially,
-// we use a simple queue.
-let pendingFrameCallback = null;
+// to handle the response indexed by timestamp. This ensures correct sync
+// even with multiple parallel frame requests.
+const pendingFrameCallbacks = new Map();
 
 function connectToAIEngine() {
   if (aiSocket && aiSocket.readyState === WebSocket.OPEN) return;
@@ -69,9 +70,10 @@ function connectToAIEngine() {
     aiSocket.on('message', (data) => {
       try {
         const response = JSON.parse(data.toString());
-        if (pendingFrameCallback) {
-          const cb = pendingFrameCallback;
-          pendingFrameCallback = null;
+        const timestampStr = String(response.timestamp); // Use string to avoid float precision issues
+        if (timestampStr && pendingFrameCallbacks.has(timestampStr)) {
+          const cb = pendingFrameCallbacks.get(timestampStr);
+          pendingFrameCallbacks.delete(timestampStr);
           cb(response);
         }
       } catch (e) {
@@ -114,26 +116,26 @@ function scheduleReconnect() {
 function sendFrameToAI(frameBase64, timestamp) {
   return new Promise((resolve) => {
     if (!aiConnected || !aiSocket || aiSocket.readyState !== WebSocket.OPEN) {
-      resolve(null); // AI not available, passthrough
+      resolve(null);
       return;
     }
 
-    // Set a timeout in case AI Engine hangs
+    const timestampStr = String(timestamp);
     const timeout = setTimeout(() => {
-      pendingFrameCallback = null;
+      pendingFrameCallbacks.delete(timestampStr);
       resolve(null);
     }, 5000);
 
-    pendingFrameCallback = (response) => {
+    pendingFrameCallbacks.set(timestampStr, (response) => {
       clearTimeout(timeout);
       resolve(response);
-    };
+    });
 
     try {
       aiSocket.send(JSON.stringify({ frame: frameBase64, timestamp }));
     } catch (e) {
       clearTimeout(timeout);
-      pendingFrameCallback = null;
+      pendingFrameCallbacks.delete(timestamp);
       resolve(null);
     }
   });
@@ -174,6 +176,41 @@ function mapAIIncidentToUIIncident(aiIncident, location) {
     updated_at: now,
     camera: cameras[0],
   };
+}
+
+// ─── Helper: Handle Incident Alert (Universal Category Throttling) ──────────────
+function handleIncidentAlert(incident) {
+  // --- COOLDOWN DEDUPLICATION ---
+  // Standardized alert windows per category for absolute dashboard stability
+  const COOLDOWNS = { accident: 20000, pothole: 10000, animal: 10000 };
+  const cooldownMs = COOLDOWNS[incident.hazard_type] || 15000;
+  
+  if (!global.incidentCooldowns) global.incidentCooldowns = new Map();
+  
+  // Absolute Stability Logic:
+  // For the demo / simulation, we only want ONE alert per category (accident/animal/pothole)
+  // every X seconds for the entire camera view. This prevents 'alert storms' caused by 
+  // noisy tracking IDs (flickering IDs).
+  const cooldownKey = `${incident.camera_id}_${incident.hazard_type}`;
+  
+  const lastTime = global.incidentCooldowns.get(cooldownKey) || 0;
+  const elapsed = Date.now() - lastTime;
+  
+  if (elapsed > cooldownMs) {
+    global.incidentCooldowns.set(cooldownKey, Date.now());
+    
+    // Add to shared memory store
+    incidents.unshift(incident);
+    if (incidents.length > 500) incidents.length = 500;
+
+    // Broadcast to UI
+    io.emit('new_alert', incident);
+    console.log(`[Alert ✓] NEW ${incident.hazard_type.toUpperCase()} | CATEGORY: ${incident.hazard_type} | SEV: ${incident.severity_label}`);
+    return true;
+  } else {
+    // console.log(`[Throttled ✗] ${incident.hazard_type} blocked for stability. Window: ${Math.round((cooldownMs - elapsed)/1000)}s left`);
+    return false;
+  }
 }
 
 // ─── Helper: Map AI Engine response → UI AnnotatedFrameResponse ─────────────
@@ -239,25 +276,28 @@ io.on('connection', (socket) => {
       for (const aiInc of aiResponse.incidents) {
         const incident = mapAIIncidentToUIIncident(aiInc, location);
         
-        // --- COOLDOWN DEDUPLICATION logic ---
-        // Prevent spamming 50 identical alerts if physical crash persists across frames
-        const cooldownKey = `${incident.camera_id}_${incident.hazard_type}`;
-        const lastTime = global.incidentCooldowns ? global.incidentCooldowns[cooldownKey] : 0;
-        
-        if (!global.incidentCooldowns) global.incidentCooldowns = {};
-        
-        if (Date.now() - lastTime > 10000) { // 10 second physical cooldown 
-          global.incidentCooldowns[cooldownKey] = Date.now();
-          
-          incidents.unshift(incident); // Add to front
-
-          // Keep incidents list manageable
-          if (incidents.length > 500) incidents.length = 500;
-
-          // Broadcast new alert to dashboards
-          io.emit('new_alert', incident);
-          console.log(`[Alert] ${incident.hazard_type.toUpperCase()} | Severity: ${incident.severity_label} | Score: ${incident.severity_score}`);
+        // Attach snapshot from AI annotated frame
+        if (aiResponse.annotated_frame) {
+          const snapB64 = aiResponse.annotated_frame.startsWith('data:') 
+            ? aiResponse.annotated_frame 
+            : `data:image/jpeg;base64,${aiResponse.annotated_frame}`;
+          incident.snapshots = [{
+            id: `snap-${uuidv4().slice(0, 6)}`,
+            incident_id: incident.id,
+            image_url: snapB64,
+            frame_type: 'detection',
+            created_at: incident.created_at,
+          }];
         }
+
+        // Attach snapshot filename from AI engine (saved to disk)
+        const aiData = aiInc.data || {};
+        if (aiData.snapshot_filename) {
+          incident.snapshot_filename = aiData.snapshot_filename;
+        }
+        
+        // Use unified alert handler for cooldown and broadcast
+        handleIncidentAlert(incident);
       }
     }
   });
@@ -297,31 +337,23 @@ app.patch('/api/alerts/:id', (req, res) => {
 // POST /api/incidents — Create incident (used by AI Engine's HTTP POST)
 app.post('/api/incidents', (req, res) => {
   const data = req.body;
-  const now = new Date().toISOString();
+  const location = { lat: data.latitude, lng: data.longitude };
 
-  const incident = {
-    id: `inc-${uuidv4().slice(0, 8)}`,
-    camera_id: data.camera_id || 'cam-mobile',
-    hazard_type: (data.type || 'pothole').toLowerCase(),
-    severity_label: (data.severity || 'medium').toLowerCase(),
-    severity_score: data.metadata?.severity_score || data.metadata?.risk_score || 50,
-    confidence: data.metadata?.confidence || 0.8,
-    status: 'new',
-    latitude: data.latitude || null,
-    longitude: data.longitude || null,
-    metadata: data.metadata || {},
-    created_at: now,
-    updated_at: now,
-    camera: cameras[0],
-  };
+  // Reuse the mapping logic to ensure consistent schema
+  const incident = mapAIIncidentToUIIncident({
+    type: data.type,
+    camera_id: data.camera_id,
+    severity: data.severity,
+    data: data.metadata
+  }, location);
 
-  incidents.unshift(incident);
-  if (incidents.length > 500) incidents.length = 500;
+  // Use unified alert handler for cooldown and broadcast
+  const wasEmitted = handleIncidentAlert(incident);
 
-  // Also broadcast as alert
-  io.emit('new_alert', incident);
-
-  res.status(201).json(incident);
+  res.status(wasEmitted ? 201 : 202).json({
+    status: wasEmitted ? 'created' : 'throttled',
+    incident_id: incident.id
+  });
 });
 
 // GET /api/cameras — Return camera list

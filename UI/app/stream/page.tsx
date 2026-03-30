@@ -317,7 +317,7 @@ export default function MobileStreamPage() {
           <button
             type="button"
             onClick={handleActivateCamera}
-            className="flex flex-col items-center gap-6 text-white/40 z-[99] p-8 cursor-pointer touch-manipulation active:scale-95 transition-transform relative"
+            className="flex flex-col items-center gap-6 text-white/40 z-50 p-8 cursor-pointer touch-manipulation active:scale-95 transition-transform relative"
           >
             <div className="w-24 h-24 rounded-full border-2 border-primary/40 flex items-center justify-center bg-primary/5">
               <Camera className="w-12 h-12 text-primary" />

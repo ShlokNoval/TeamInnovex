@@ -1,5 +1,7 @@
 import cv2
+import os
 import numpy as np
+from datetime import datetime
 
 from detector import Detector
 from tracking import CentroidTracker
@@ -7,6 +9,10 @@ from pothole_engine import PotholeEngine
 from accident_engine import AccidentEngine
 from animal_engine import AnimalEngine
 from config import MODEL_PATH, SEVERITY_HIGH
+
+# Directory for alert snapshot images
+SNAPSHOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'snapshots')
+os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 
 class AIPipeline:
     def __init__(self, model_path=MODEL_PATH):
@@ -36,15 +42,41 @@ class AIPipeline:
         
         # Build enriched detections combining YOLO metadata with tracker persistent IDs
         enriched_detections = []
+        
+        VEHICLE_CLASSES = frozenset({'car', 'truck', 'motorcycle', 'bus', 'bicycle', 'train', 'boat'})
+        ANIMAL_CLASSES  = frozenset({'dog', 'cat', 'cow', 'horse', 'sheep', 'bird', 'bear', 'elephant', 'zebra', 'giraffe'})
+        PERSON_CLASSES  = frozenset({'person'})
+        EXCLUDE_FROM_ALIAS = VEHICLE_CLASSES | PERSON_CLASSES | ANIMAL_CLASSES
+        
+        # Collect vehicle bounding boxes so we can do a spatial overlap check
+        vehicle_bboxes = [d['bbox'] for d in detections if d['class_name'] in VEHICLE_CLASSES]
+        
+        def overlaps_vehicle(bbox):
+            """Returns True if bbox significantly overlaps any vehicle bbox."""
+            x1, y1, w1, h1 = bbox
+            for vx, vy, vw, vh in vehicle_bboxes:
+                # Compute intersection
+                ix1 = max(x1, vx)
+                iy1 = max(y1, vy)
+                ix2 = min(x1 + w1, vx + vw)
+                iy2 = min(y1 + h1, vy + vh)
+                if ix2 > ix1 and iy2 > iy1:
+                    intersection = (ix2 - ix1) * (iy2 - iy1)
+                    area = w1 * h1
+                    if area > 0 and intersection / area > 0.3:  # 30% overlap threshold
+                        return True
+            return False
+        
         for det in detections:
             det_bbox = tuple(det['bbox'])
             mapped_track_id = None
             velocity_px = 0.0
+            t_id_int = -1
             
-            # Find matching track from tracker based on identical bbox coordinates
             for t_id, t_info in track_objects.items():
                 if tuple(t_info['bbox']) == det_bbox:
                     mapped_track_id = str(t_id)
+                    t_id_int = t_id
                     velocity_px = t_info.get('velocity_px', 0.0)
                     break
                     
@@ -53,29 +85,71 @@ class AIPipeline:
                 
             det['track_id'] = mapped_track_id
             det['velocity_px'] = velocity_px
-            # Ensure class mapping covers both conventions
             
-            # --- MOTION-AWARE POTHOLE ALIAS ---
-            # yolov8n.pt has no native pothole class. We alias stationary, low-confidence
-            # objects in the lower road zone as potholes.
-            # CRITICAL: Never alias known vehicle/person/animal classes — even at low 
-            # confidence, YOLO's class prediction is usually correct for these.
-            VEHICLE_CLASSES = {'car', 'truck', 'motorcycle', 'bus', 'bicycle', 'train', 'boat'}
-            PERSON_CLASSES = {'person'}
-            ANIMAL_CLASSES = {'dog', 'cat', 'cow', 'horse', 'sheep', 'bird', 'bear', 'elephant', 'zebra', 'giraffe'}
-            EXCLUDE_FROM_ALIAS = VEHICLE_CLASSES | PERSON_CLASSES | ANIMAL_CLASSES
+            # How long has this object been tracked?
+            track_length = len(self.tracker.history.get(t_id_int, [])) if t_id_int != -1 else 0
             
-            if (det['confidence'] < 0.26 
-                and det['velocity_px'] < 1.5
-                and det['class_name'] not in EXCLUDE_FROM_ALIAS):
+            # --- POTHOLE ALIAS ---
+            # Alias low-confidence, stationary, road-surface objects as potholes.
+            # Guards:
+            #   1. Low confidence — YOLO doesn't know what this is
+            #   2. Velocity < 3.0 px — stationary (raised from 1.5 to handle tracker noise)
+            #   3. Not a known class — don't override real detections
+            #   4. No spatial overlap with any vehicle bbox — prevents vehicle parts being aliased
+            #   5. In lower 50% of frame — road surface zone (tightened from 30% to reduce noise)
+            #   6. Must be tracked for >= 3 frames — prevents 1-frame ghost noise!
+            if (det['confidence'] < 0.26
+                    and det['velocity_px'] < 3.0
+                    and track_length >= 3
+                    and det['class_name'] not in EXCLUDE_FROM_ALIAS
+                    and not overlaps_vehicle(det['bbox'])):
                 x, y, w, h = det['bbox']
-                if y > img_h * 0.3:
+                if y > img_h * 0.50:   # Tightened: bottom 50% only (was 30%)
                     det['class_name'] = 'pothole'
                     det['confidence'] = 0.85
                     det['area_norm'] = 0.7
             
             det['class'] = det['class_name']
             enriched_detections.append(det)
+
+        # -----------------------------------------------------------------------
+        # Per-class confidence TRUST thresholds.
+        # YOLO runs at conf=0.05 globally (needed to catch faint road artifacts
+        # for pothole aliasing). BUT at that threshold, the model hallucinates
+        # vehicles, persons and animals in every video. We therefore require a
+        # much higher confidence before treating a detection as a real member of
+        # that class. Ghost detections below these bars are completely ignored by
+        # the accident and animal engines.
+        # -----------------------------------------------------------------------
+        VEHICLE_MIN_CONF = 0.40   # Must be very confident it's a vehicle
+        PERSON_MIN_CONF  = 0.40   # Must be very confident it's a person
+        ANIMAL_MIN_CONF  = 0.30   # Slightly lenient for animals
+
+        # Trusted-class filtered views — only real, confident detections
+        trusted_vehicles = [
+            d for d in enriched_detections
+            if d['class'] in VEHICLE_CLASSES and d['confidence'] >= VEHICLE_MIN_CONF
+        ]
+        trusted_persons = [
+            d for d in enriched_detections
+            if d['class'] in PERSON_CLASSES and d['confidence'] >= PERSON_MIN_CONF
+        ]
+        trusted_animals = [
+            d for d in enriched_detections
+            if d['class'] in ANIMAL_CLASSES and d['confidence'] >= ANIMAL_MIN_CONF
+        ]
+        trusted_potholes = [
+            d for d in enriched_detections
+            if d['class'] == 'pothole'
+        ]
+
+        # Accident engine receives ONLY trusted vehicles + persons, not noise
+        accident_detections = trusted_vehicles + trusted_persons
+        
+        # Only visible detections are drawn on screen. This entirely stops the UI bug
+        # where "anything is being detected" since 5% confidence noise is not rendered.
+        visible_detections = trusted_vehicles + trusted_persons + trusted_animals + trusted_potholes
+
 
         track_severities = {}
         all_incidents = []
@@ -88,16 +162,15 @@ class AIPipeline:
             M_anomaly = self.accident_engine.compute_optical_flow(prev_frame, frame, camera_id)
             
         accident_result = self.accident_engine.compute_score(
-            enriched_detections, M_anomaly, img_w, img_h, camera_id, frame_num
+            accident_detections, M_anomaly, img_w, img_h, camera_id, frame_num
         )
         
         hit_and_run_detected = False
         hit_and_run_tracks = []
-        for det in enriched_detections:
-            if det['class'] in {'car', 'truck', 'motorcycle', 'bus'}:
-                if self.accident_engine.detect_hit_and_run(camera_id, det['track_id'], frame_num):
-                    hit_and_run_detected = True
-                    hit_and_run_tracks.append(det['track_id'])
+        for det in trusted_vehicles:
+            if self.accident_engine.detect_hit_and_run(camera_id, det['track_id'], frame_num):
+                hit_and_run_detected = True
+                hit_and_run_tracks.append(det['track_id'])
                     
         # Hit & run manual severity spike override natively ported
         if hit_and_run_detected and accident_result['severity_score'] < SEVERITY_HIGH:
@@ -107,16 +180,26 @@ class AIPipeline:
 
         accident_bbox = [0, 0, img_w // 2, img_h // 2]
         accident_conf = 0.8
-        for det in enriched_detections:
-            if det['class'] in {'car', 'truck', 'motorcycle', 'bus'}:
-                accident_bbox = det['bbox']
-                accident_conf = det['confidence']
-                break
-                
+        for det in trusted_vehicles:
+            accident_bbox = det['bbox']
+            accident_conf = det['confidence']
+            break
+
         accident_result['bbox'] = accident_bbox
         accident_result['confidence'] = accident_conf
 
-        if self.accident_engine.should_alert(accident_result['severity_label']):
+        # Only alert for accidents if MULTIPLE trusted vehicles are present.
+        # trusted_vehicles already filtered to conf >= 0.40, so ghost detections
+        # cannot inflate this count.
+        has_multiple_vehicles = len(trusted_vehicles) >= 2
+
+        if (has_multiple_vehicles and 
+            self.accident_engine.should_alert(accident_result['severity_label']) and
+            not self.accident_engine._is_duplicate_incident(camera_id, accident_bbox, frame_num)):
+            
+            # Record this incident to prevent duplicates in next 90 frames
+            self.accident_engine.record_incident(camera_id, accident_bbox, frame_num)
+            
             all_incidents.append({
                 'type': 'accident',
                 'camera_id': camera_id,
@@ -125,12 +208,11 @@ class AIPipeline:
                 'data': accident_result
             })
             # Map all vehicle tracks to this severity for UI annotation
-            for det in enriched_detections:
-                if det['class'] in {'car', 'truck', 'motorcycle', 'bus'}:
-                    track_severities[det['track_id']] = accident_result['severity_label']
+            for det in trusted_vehicles:
+                track_severities[det['track_id']] = accident_result['severity_label']
 
-        # --- Pothole & Animal Engine (Object-level Iteration) ---
-        for det in enriched_detections:
+        # --- Pothole Engine (iterates ONLY over trusted potholes) ---
+        for det in trusted_potholes:
             cls_name = det['class']
             t_id = det['track_id']
             
@@ -141,6 +223,7 @@ class AIPipeline:
                 
                 track_severities[t_id] = score_info['severity_label']
                 if self.pothole_engine.should_alert(score_info['severity_label']):
+                    score_info['track_id'] = str(t_id) # Attach track_id for backend deduplication
                     all_incidents.append({
                         'type': 'pothole',
                         'camera_id': camera_id,
@@ -148,38 +231,60 @@ class AIPipeline:
                         'severity': score_info['severity_label'],
                         'data': score_info
                     })
-                    
-            elif cls_name in {'dog', 'cat', 'cow', 'horse', 'sheep', 'animal'}:
-                # Fetch recent centroid path history safely bounding backwards compatible index loops
-                t_id_int = int(t_id) if t_id.isdigit() else t_id
-                centroid_history = self.tracker.history.get(t_id_int, [])
+
+        # --- Animal Engine (iterates ONLY trusted_animals — conf >= 0.30) ---
+        # This prevents ghost animal detections in pothole/accident-only videos
+        # from generating false animal alerts.
+        for det in trusted_animals:
+            t_id = det['track_id']
+            t_id_int = int(t_id) if t_id.isdigit() else t_id
+            centroid_history = self.tracker.history.get(t_id_int, [])
+            
+            score_info = self.animal_engine.compute_score(
+                det, det['velocity_px'], centroid_history, None, img_w, img_h
+            )
+            
+            score_info['bbox'] = det['bbox']
+            
+            track_severities[t_id] = score_info['risk_label']
+            if (self.animal_engine.should_alert(score_info['risk_label'], centroid_history) and
+                not self.accident_engine._is_duplicate_incident(camera_id, det['bbox'], frame_num, threshold_distance=80)):
                 
-                score_info = self.animal_engine.compute_score(
-                    det, det['velocity_px'], centroid_history, None, img_w, img_h # road_boundary_polygon natively set to None
-                )
+                # Record this animal incident
+                self.accident_engine.record_incident(camera_id, det['bbox'], frame_num)
                 
-                score_info['bbox'] = det['bbox']
-                
-                track_severities[t_id] = score_info['risk_label']
-                if self.animal_engine.should_alert(score_info['risk_label'], centroid_history):
-                    all_incidents.append({
-                        'type': 'animal',
-                        'camera_id': camera_id,
-                        'frame': frame_num,
-                        'severity': score_info['risk_label'],
-                        'data': score_info
-                    })
+                score_info['track_id'] = str(t_id) # Attach track_id for backend deduplication
+                all_incidents.append({
+                    'type': 'animal',
+                    'camera_id': camera_id,
+                    'frame': frame_num,
+                    'severity': score_info['risk_label'],
+                    'data': score_info
+                })
 
         self.prev_frames[camera_id] = frame.copy()
         
-        # 4. Annotation Routing
+        # 4. Annotation Routing (ONLY draw objects we care about)
         track_ids_idx = {}
         severity_map_idx = {}
-        for idx, det in enumerate(enriched_detections):
+        for idx, det in enumerate(visible_detections):
             t_id = det['track_id']
             track_ids_idx[idx] = t_id
             severity_map_idx[idx] = track_severities.get(t_id, 'LOW')
 
-        annotated_frame = self.detector.annotate(frame, detections, track_ids_idx, severity_map_idx)
+        annotated_frame = self.detector.annotate(frame, visible_detections, track_ids_idx, severity_map_idx)
+        
+        # 5. Snapshot Capture — save annotated frame at alert time for admin dashboard
+        if all_incidents:
+            for inc in all_incidents:
+                ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                snap_name = f"{camera_id}_{inc['type']}_{inc['severity']}_{ts}.jpg"
+                snap_path = os.path.join(SNAPSHOT_DIR, snap_name)
+                try:
+                    cv2.imwrite(snap_path, annotated_frame)
+                    inc['data']['snapshot_path'] = snap_path
+                    inc['data']['snapshot_filename'] = snap_name
+                except Exception as e:
+                    print(f"[Snapshot] Failed to save {snap_name}: {e}")
         
         return annotated_frame, all_incidents

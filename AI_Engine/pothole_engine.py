@@ -71,7 +71,9 @@ class PotholeEngine:
         x, y, w, h = detection['bbox']
         confidence = detection['confidence']
         
-        A_norm = (w * h) / (img_w * img_h)
+        # Use pre-computed area_norm from pipeline alias if available,
+        # otherwise calculate from actual bbox dimensions
+        A_norm = detection.get('area_norm', (w * h) / (img_w * img_h))
         C = confidence
         
         zone_str = self.classify_zone(detection['bbox'], img_w)
@@ -155,7 +157,7 @@ class PotholeEngine:
             return 'STABLE'
 
     def should_alert(self, severity_label):
-        return severity_label == 'HIGH'
+        return severity_label in ('MEDIUM', 'HIGH')
 
     def process_video(self, video_path, model, camera_id, is_night=False):
         cap = cv2.VideoCapture(video_path)

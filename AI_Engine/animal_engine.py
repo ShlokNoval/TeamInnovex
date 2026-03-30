@@ -115,7 +115,7 @@ class AnimalEngine:
         }
 
     def should_alert(self, risk_label: str, centroid_history: list = None) -> bool:
-        if risk_label != 'HIGH':
+        if risk_label not in ('MEDIUM', 'HIGH'):
             return False
             
         # Feature 7: Temporal Confirmation (Accuracy Boost)

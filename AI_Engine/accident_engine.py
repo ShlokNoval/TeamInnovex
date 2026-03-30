@@ -18,6 +18,7 @@ SEVERITY_HIGH = 71
 FRAME_BUFFER = 5  # frames for hit-and-run detection
 VELOCITY_HISTORY = 5  # frames for rolling velocity
 FLOW_HISTORY_MAX = 30  # frames for baseline flow std
+INCIDENT_DEDUP_FRAMES = 90  # ~3 seconds at 30fps: prevent re-reporting same incident within this window
 
 class AccidentEngine:
     def __init__(self):
@@ -26,8 +27,75 @@ class AccidentEngine:
         # Flow baseline and history keyed by camera_id
         self.flow_baseline = {}
         self.flow_history = {}
+        
+        # Incident deduplication cache: keyed by camera_id
+        # Stores: {camera_id: [(frame_num, centroid_x, centroid_y, incident_type), ...]}
+        self.reported_incidents = {}
+
+    # ----------------- Incident Deduplication -----------------
+
+    def _create_incident_fingerprint(self, camera_id, bbox, frame_num):
+        """Create a hashable fingerprint for an incident based on position."""
+        cx = bbox[0] + bbox[2] // 2
+        cy = bbox[1] + bbox[3] // 2
+        return (frame_num, cx, cy)
+
+    def _is_duplicate_incident(self, camera_id, bbox, frame_num, threshold_distance=100):
+        """
+        Check if this incident is a duplicate of a recently reported one.
+        Returns True if a similar incident was reported within INCIDENT_DEDUP_FRAMES.
+        
+        Args:
+            camera_id: Camera identifier
+            bbox: Bounding box [x, y, w, h]
+            frame_num: Current frame number
+            threshold_distance: Pixel distance threshold (100px = ~3-4 inches at typical resolution)
+        
+        Returns:
+            bool: True if duplicate, False if new incident
+        """
+        if camera_id not in self.reported_incidents:
+            self.reported_incidents[camera_id] = []
+        
+        incident_list = self.reported_incidents[camera_id]
+        
+        # Current incident centroid
+        cx = bbox[0] + bbox[2] // 2
+        cy = bbox[1] + bbox[3] // 2
+        
+        # Check against recent incidents
+        duplicates_to_remove = []
+        for idx, (prev_frame, prev_cx, prev_cy) in enumerate(incident_list):
+            frame_diff = frame_num - prev_frame
+            
+            # Remove expired incidents (older than INCIDENT_DEDUP_FRAMES)
+            if frame_diff > INCIDENT_DEDUP_FRAMES:
+                duplicates_to_remove.append(idx)
+                continue
+            
+            # Check spatial proximity for active incidents
+            distance = math.sqrt((cx - prev_cx)**2 + (cy - prev_cy)**2)
+            if distance < threshold_distance and frame_diff < INCIDENT_DEDUP_FRAMES:
+                # This is a duplicate of a recent incident
+                return True
+        
+        # Clean up expired incidents (reverse order to maintain indices)
+        for idx in reversed(duplicates_to_remove):
+            incident_list.pop(idx)
+        
+        return False
+
+    def record_incident(self, camera_id, bbox, frame_num):
+        """Record a newly reported incident for future deduplication."""
+        if camera_id not in self.reported_incidents:
+            self.reported_incidents[camera_id] = []
+        
+        cx = bbox[0] + bbox[2] // 2
+        cy = bbox[1] + bbox[3] // 2
+        self.reported_incidents[camera_id].append((frame_num, cx, cy))
 
     # ----------------- Bounding Box & Collision -----------------
+
     @staticmethod
     def compute_iou(boxA, boxB):
         """Compute IoU between two boxes [x, y, w, h]."""
@@ -57,6 +125,7 @@ class AccidentEngine:
         return collision_detected, max_iou
 
     # ----------------- Optical Flow & Motion -----------------
+
     def compute_optical_flow(self, prev_frame, curr_frame, camera_id):
         """Compute motion anomaly score M_anomaly based on flow std dev."""
         prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
@@ -92,7 +161,6 @@ class AccidentEngine:
         M_anomaly = min(1.0, std_val / safe_baseline)
         return M_anomaly
 
-    # ----------------- Velocity & Sudden Stop -----------------
     def compute_velocity(self, camera_id, track_id, centroid, frame_interval=1):
         key = (camera_id, track_id)
         if key not in self.state:
@@ -149,6 +217,7 @@ class AccidentEngine:
     def compute_score(self, detections, M_anomaly, img_w, img_h, camera_id, frame_num):
         # Update last_seen for active tracks
         active_track_ids = []
+        any_sudden_stop = False
         for det in detections:
             if 'track_id' in det:
                 track_id = det['track_id']
@@ -156,6 +225,10 @@ class AccidentEngine:
                 if key in self.state:
                     self.state[key]['last_seen'] = frame_num
                 active_track_ids.append(track_id)
+                # Check for sudden stops on vehicle tracks
+                if str(det.get('class', '')).lower() in {'car', 'truck', 'motorcycle', 'bus'}:
+                    if self.detect_sudden_stop(camera_id, track_id):
+                        any_sudden_stop = True
 
         # Collision
         collision_detected, max_iou = self.detect_collision(detections)
@@ -185,6 +258,18 @@ class AccidentEngine:
               ACCIDENT_WEIGHTS['speed']*S_norm) * 100
         SS = round(SS, 2)
 
+        # ===== CRITICAL FIX =====
+        # An accident REQUIRES hard physical evidence:
+        #   1. Actual bounding-box collision between vehicles (IoU > 0.3), OR
+        #   2. A sudden-stop event on a vehicle track.
+        # Without either, optical flow + vehicle presence alone is NOT
+        # sufficient — it's just normal driving, camera shake, or animals.
+        has_collision_evidence = collision_detected or any_sudden_stop
+
+        if not has_collision_evidence:
+            # No real collision — clamp to LOW regardless of flow score
+            SS = min(SS, SEVERITY_LOW - 1)
+
         # Severity label
         if SS <= SEVERITY_LOW:
             label = 'LOW'
@@ -200,8 +285,9 @@ class AccidentEngine:
             'M_anomaly': M_anomaly,
             'N_vehicles': N_vehicles,
             'human_present': H_pres > 0.0,
-            'collision_detected': collision_detected
+            'collision_detected': collision_detected,
+            'sudden_stop_detected': any_sudden_stop
         }
 
     def should_alert(self, severity_label):
-        return severity_label == 'HIGH'
+        return severity_label in ('MEDIUM', 'HIGH')

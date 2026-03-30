@@ -89,7 +89,8 @@ async def websocket_stream(websocket: WebSocket, camera_id: str):
                 output_payload = {
                     "annotated_frame": annotated_b64,
                     "incidents_count": len(all_incidents),
-                    "incidents": all_incidents
+                    "incidents": all_incidents,
+                    "timestamp": data.get('timestamp')
                 }
                 
                 await websocket.send_json(output_payload)

@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
+  DropdownMenuGroup, 
   DropdownMenuItem, 
   DropdownMenuLabel, 
   DropdownMenuSeparator, 
@@ -166,20 +167,22 @@ export default function IncidentsPage() {
                         <MoreVertical className="h-4 w-4" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48 bg-slate-950 border-white/10 text-white">
-                        <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-widest px-2 py-1.5">Manage Incident</DropdownMenuLabel>
-                        <DropdownMenuSeparator className="bg-white/5" />
-                        <DropdownMenuItem onClick={() => handleStatusUpdate(incident.id, 'new')} className="text-xs hover:bg-primary/20">
-                          <AlertTriangle className="mr-2 h-3.5 w-3.5 text-amber-500" /> Mark as New
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleStatusUpdate(incident.id, 'assigned')} className="text-xs hover:bg-primary/20">
-                          <Clock className="mr-2 h-3.5 w-3.5 text-blue-400" /> Assign Units
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleStatusUpdate(incident.id, 'in-progress')} className="text-xs hover:bg-primary/20">
-                          <Hammer className="mr-2 h-3.5 w-3.5 text-orange-400" /> In Progress
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleStatusUpdate(incident.id, 'resolved')} className="text-xs hover:bg-primary/20 font-bold text-green-400">
-                          <CheckCircle2 className="mr-2 h-3.5 w-3.5" /> Mark Resolved
-                        </DropdownMenuItem>
+                        <DropdownMenuGroup>
+                          <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-widest px-2 py-1.5">Manage Incident</DropdownMenuLabel>
+                          <DropdownMenuSeparator className="bg-white/5" />
+                          <DropdownMenuItem onClick={() => handleStatusUpdate(incident.id, 'new')} className="text-xs hover:bg-primary/20">
+                            <AlertTriangle className="mr-2 h-3.5 w-3.5 text-amber-500" /> Mark as New
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusUpdate(incident.id, 'assigned')} className="text-xs hover:bg-primary/20">
+                            <Clock className="mr-2 h-3.5 w-3.5 text-blue-400" /> Assign Units
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusUpdate(incident.id, 'in-progress')} className="text-xs hover:bg-primary/20">
+                            <Hammer className="mr-2 h-3.5 w-3.5 text-orange-400" /> In Progress
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusUpdate(incident.id, 'resolved')} className="text-xs hover:bg-primary/20 font-bold text-green-400">
+                            <CheckCircle2 className="mr-2 h-3.5 w-3.5" /> Mark Resolved
+                          </DropdownMenuItem>
+                        </DropdownMenuGroup>
                         <DropdownMenuSeparator className="bg-white/5" />
                         <Link href={`/dashboard/incidents/${incident.id}`}>
                           <DropdownMenuItem className="text-xs hover:bg-primary/20">
