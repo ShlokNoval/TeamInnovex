@@ -16,7 +16,7 @@ def test_preprocess_night_mode():
     detector_night = Detector('yolov8n.pt', night_mode=True)
     frame = np.ones((100, 100, 3), dtype=np.uint8) * 50
     out = detector_night.preprocess(frame)
-    assert out is != None
+    assert out is not None
     assert out.shape == frame.shape
     
 def test_detect_empty_frame(detector_day):

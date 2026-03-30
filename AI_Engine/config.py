@@ -6,8 +6,8 @@ load_dotenv()
 
 # --- MODEL CONSTANTS ---
 MODEL_PATH = os.getenv('MODEL_PATH', 'yolov8n.pt')
-CONF_THRESHOLD = 0.45
-CONF_THRESHOLD_NIGHT = 0.36
+CONF_THRESHOLD = 0.55        # was 0.45 — spec says incident threshold is 0.55
+CONF_THRESHOLD_NIGHT = 0.44  # was 0.36 — must be 0.55 × 0.80
 NMS_THRESHOLD = 0.45
 
 # --- TRACKING CONSTANTS ---

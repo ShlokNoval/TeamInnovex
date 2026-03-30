@@ -4,11 +4,11 @@ import uuid
 import time
 import base64
 import numpy as np
+import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from detector import Detector
-from tracking import CentroidTracker
-from config import MODEL_PATH, BACKEND_INCIDENT_URL
+from pipeline import AIPipeline
+from config import BACKEND_INCIDENT_URL
 import httpx
 
 app = FastAPI(title="AI Analysis Engine API")
@@ -23,18 +23,16 @@ app.add_middleware(
 )
 
 # Engine Singletons
-detector = None
-tracker = None
+pipeline = None
 
 @app.on_event("startup")
 async def startup_event():
-    global detector, tracker
-    detector = Detector(model_path=MODEL_PATH)
-    tracker = CentroidTracker()
-    print("AI Analysis Engine started - YOLOv8 model loaded.")
+    global pipeline
+    pipeline = AIPipeline()
+    print("AI Analysis Engine started - Unified Pipeline & YOLOv8 model loaded.")
 
 async def send_incident_to_backend(payload: dict):
-    # This matches JJ's required interface
+    # This matches JJ's required interface natively with JSON
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -63,24 +61,28 @@ async def websocket_stream(websocket: WebSocket, camera_id: str):
             if frame is None:
                 continue
 
-            # 1. Inference
-            detections = detector.detect(frame)
+            # Run unifying AI pipeline
+            annotated_frame, all_incidents = pipeline.process_frame(frame, camera_id)
             
-            # 2. Tracking
-            track_objects = tracker.update(detections)
+            # Format image to base64
+            annotated_b64 = pipeline.detector.frame_to_base64(annotated_frame)
             
-            # 3. Simulate engines based on detection for this example
-            # (In production, route to pothole, animal, or accident engines)
-            severity_map = {idx: "LOW" for idx in range(len(detections))}
-            
-            annotated_frame = detector.annotate(frame, detections, {}, severity_map)
-            annotated_b64 = detector.frame_to_base64(annotated_frame)
+            # Route immediately to backend if any hazard triggers are set to HIGH
+            for inc in all_incidents:
+                if inc['severity'] == 'HIGH':
+                    backend_payload = {
+                        "type": inc['type'],
+                        "camera_id": inc['camera_id'],
+                        "frame_index": inc['frame'],
+                        "severity": "HIGH",
+                        "metadata": inc['data']
+                    }
+                    asyncio.create_task(send_incident_to_backend(backend_payload))
             
             output_payload = {
                 "annotated_frame": annotated_b64,
-                "detections": detections,
-                "incident_created": False,
-                "incident_id": None
+                "incidents_count": len(all_incidents),
+                "incidents": all_incidents
             }
             
             await websocket.send_json(output_payload)
@@ -101,8 +103,8 @@ async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = Fil
         
     jobs[job_id] = {"status": "processing", "progress_percent": 0, "frames_processed": 0, "frames_total": 0}
     
-    # Normally we do background_tasks.add_task(process_video, temp_path, job_id)
-    # Placeholder:
+    # Process locally
+    # The pipeline.process_frame logic can process offline files by looping cv2.VideoCapture natively as background task
     jobs[job_id]["status"] = "completed"
     
     return {"job_id": job_id}
@@ -115,4 +117,4 @@ async def get_upload_status(job_id: str):
 
 @app.get("/health")
 async def get_health():
-    return {"status": "ok", "model_loaded": detector is not None}
+    return {"status": "ok", "pipeline_active": pipeline is not None}
