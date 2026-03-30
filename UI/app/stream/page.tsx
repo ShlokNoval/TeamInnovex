@@ -281,7 +281,7 @@ export default function MobileStreamPage() {
 
   return (
     <div 
-      className="min-h-dvh bg-black text-white font-mono flex flex-col"
+      className="min-h-[100dvh] h-[100dvh] overflow-hidden bg-black text-white font-mono flex flex-col relative"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 8px)' }}
     >
       {/* Upper Status Bar */}
@@ -317,7 +317,8 @@ export default function MobileStreamPage() {
           <button
             type="button"
             onClick={handleActivateCamera}
-            className="flex flex-col items-center gap-6 text-white/40 z-30 p-8 cursor-pointer touch-manipulation active:scale-95 transition-transform"
+            onTouchEnd={(e) => { e.preventDefault(); handleActivateCamera(); }}
+            className="flex flex-col items-center gap-6 text-white/40 z-50 p-8 cursor-pointer touch-manipulation active:scale-95 transition-transform relative"
           >
             <div className="w-24 h-24 rounded-full border-2 border-primary/40 flex items-center justify-center bg-primary/5">
               <Camera className="w-12 h-12 text-primary" />
@@ -471,6 +472,7 @@ export default function MobileStreamPage() {
          <button 
             type="button"
             onClick={toggleStream}
+            onTouchEnd={(e) => { e.preventDefault(); toggleStream(); }}
             style={{ 
               WebkitTapHighlightColor: 'transparent',
               WebkitAppearance: 'none',
