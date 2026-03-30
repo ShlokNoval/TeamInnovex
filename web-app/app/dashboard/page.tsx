@@ -8,11 +8,14 @@ import { format } from "date-fns"
 export default function DashboardOverview() {
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Overview</h2>
+      <div className="flex items-center justify-between space-y-2 mb-6 border-b border-slate-800/50 pb-4">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-100 to-slate-500">Node Command Hub</h2>
+          <p className="text-slate-400 text-sm mt-1">Real-time surveillance and incident tracking layer.</p>
+        </div>
         <div className="flex items-center space-x-2">
-          <div className="text-sm text-muted-foreground mr-4">
-            {format(new Date(), 'EEEE, MMMM d, yyyy')}
+          <div className="text-sm font-mono text-indigo-400/80 mr-4 tracking-wider">
+            {format(new Date(), 'EEEE, MMMM d, yyyy')} | GLOBAL SENSORS: ACTIVE
           </div>
         </div>
       </div>

@@ -3,7 +3,7 @@ import { wsService } from "@/lib/websocket"
 import { AnnotatedFrameResponse } from "@/lib/types"
 
 interface VideoPlayerProps {
-  file: File
+  file: File | null
 }
 
 export function VideoPlayer({ file }: VideoPlayerProps) {
@@ -19,15 +19,19 @@ export function VideoPlayer({ file }: VideoPlayerProps) {
   const requestRef = useRef<number>(0)
   
   useEffect(() => {
-    const objectUrl = URL.createObjectURL(file)
-    if (videoRef.current) {
-      videoRef.current.src = objectUrl
-      videoRef.current.play().catch(e => console.error("Autoplay failed", e))
+    let objectUrl: string | null = null
+    
+    if (file) {
+      objectUrl = URL.createObjectURL(file)
+      if (videoRef.current) {
+        videoRef.current.src = objectUrl
+        videoRef.current.play().catch(e => console.error("Autoplay failed", e))
+      }
     }
     
     // Connect WebSocket
     wsService.connect()
-    wsService.subscribeToFrames((response: AnnotatedFrameResponse) => {
+    const handleFrame = (response: AnnotatedFrameResponse) => {
       // In a real app, we'd overlay this on the canvas. 
       // For the mock, the backend sends back the annotated frame as base64.
       setAnnotatedFrame(response.annotatedFrame)
@@ -40,10 +44,12 @@ export function VideoPlayer({ file }: VideoPlayerProps) {
         frameCountRef.current = 0
         lastTimeRef.current = now
       }
-    })
+    }
+
+    wsService.subscribeToFrames(handleFrame)
 
     return () => {
-      URL.revokeObjectURL(objectUrl)
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
       wsService.unsubscribeFromFrames()
       if (requestRef.current) cancelAnimationFrame(requestRef.current)
     }

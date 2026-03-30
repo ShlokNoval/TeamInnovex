@@ -1,16 +1,26 @@
 import { io, Socket } from 'socket.io-client';
 import { AnnotatedFrameResponse, Incident } from './types';
 
-// Used for simulating WebSocket events in UI-only mode
-const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK !== 'false';
+// Disabled MOCK mode so mobile frames can actually reach the local network relay.
+const USE_MOCK = false;
 
 type AlertCallback = (alert: Incident) => void;
 type FrameCallback = (response: AnnotatedFrameResponse) => void;
 
 class WebSocketService {
   private socket: Socket | null = null;
-  private backendUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:8000';
   
+  // Use current origin if we are accessed via Ngrok or external IP, otherwise fallback to explicit localhost
+  private getBackendUrl() {
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        return ''; // Socket.io will automatically use the current origin
+      }
+    }
+    return process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:8000';
+  }
+
   // Mock simulation state
   private mockInterval: NodeJS.Timeout | null = null;
   private mockAlertInterval: NodeJS.Timeout | null = null;
@@ -19,7 +29,7 @@ class WebSocketService {
     if (USE_MOCK) return;
 
     if (!this.socket) {
-      this.socket = io(this.backendUrl, {
+      this.socket = io(this.getBackendUrl(), {
         path: '/ws',
         autoConnect: true,
       });
@@ -41,6 +51,8 @@ class WebSocketService {
     }
   }
 
+  private httpPollInterval: NodeJS.Timeout | null = null;
+
   // Testing Dashboard - Send raw frame, receive annotated frame
   subscribeToFrames(onFrame: FrameCallback) {
     if (USE_MOCK) {
@@ -48,7 +60,19 @@ class WebSocketService {
       return;
     }
 
-    this.socket?.on('annotated_frame', onFrame);
+    // HTTP Polling shim for robust ngrok support during demo
+    if (this.httpPollInterval) clearInterval(this.httpPollInterval);
+    this.httpPollInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/stream');
+        const data = await res.json();
+        if (data.annotatedFrame) {
+          onFrame(data);
+        }
+      } catch (err) {
+        console.error("Frame poll failed", err);
+      }
+    }, 200); // Poll at 5 FPS
   }
 
   unsubscribeFromFrames() {
@@ -56,21 +80,53 @@ class WebSocketService {
       if (this.mockInterval) clearInterval(this.mockInterval);
       return;
     }
-    this.socket?.off('annotated_frame');
+    if (this.httpPollInterval) clearInterval(this.httpPollInterval);
   }
 
   sendFrame(base64Frame: string, timestamp: number) {
-    if (USE_MOCK) return; // Mock simulation handles itself once started
-    this.socket?.emit('process_frame', { frame: base64Frame, timestamp });
+    if (USE_MOCK) return; 
+    
+    // Send standard HTTP payload
+    fetch('/api/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ frame: base64Frame, timestamp })
+    }).catch(e => console.error("Send failed", e));
   }
+
+  private httpAlertPollInterval: NodeJS.Timeout | null = null;
+  private processedAlertIds = new Set<string>();
 
   // Admin Dashboard - Receive new alerts
   subscribeToAlerts(onAlert: AlertCallback) {
     if (USE_MOCK) {
+       // Currently hardcoded to false, but keeping structure
       this.startMockAlertSimulation(onAlert);
       return;
     }
-    this.socket?.on('new_alert', onAlert);
+
+    if (this.httpAlertPollInterval) clearInterval(this.httpAlertPollInterval);
+    this.httpAlertPollInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/stream');
+        const data = await res.json();
+        if (data.newAlerts && data.newAlerts.length > 0) {
+          data.newAlerts.forEach((alert: any) => {
+             if (!this.processedAlertIds.has(alert.id)) {
+                this.processedAlertIds.add(alert.id);
+                onAlert(alert);
+             }
+          });
+          // Keep set from growing infinitely
+          if (this.processedAlertIds.size > 100) {
+             const iterator = this.processedAlertIds.values();
+             for(let i=0; i<20; i++) this.processedAlertIds.delete(iterator.next().value!);
+          }
+        }
+      } catch (err) {
+        // silent fail on poll
+      }
+    }, 1000); // Admin polls every 1 second
   }
 
   unsubscribeFromAlerts() {
@@ -78,7 +134,7 @@ class WebSocketService {
       if (this.mockAlertInterval) clearInterval(this.mockAlertInterval);
       return;
     }
-    this.socket?.off('new_alert');
+    if (this.httpAlertPollInterval) clearInterval(this.httpAlertPollInterval);
   }
 
   // Mock simulation logic

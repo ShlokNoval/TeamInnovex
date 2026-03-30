@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Activity, LayoutDashboard, MonitorPlay, Shield, Zap, Search, ChevronRight, Lock } from "lucide-react"
+import { ArrowRight, Activity, ShieldAlert, Cpu, Network, Lock, Zap, Search, ShieldCheck, CheckCircle2, ChevronRight, Play, MonitorPlay, FileVideo, Video, Wifi, Shield } from "lucide-react"
 import { motion } from "framer-motion"
 import { useEffect, useState } from "react"
 
@@ -118,27 +118,44 @@ export default function LandingPage() {
             ))}
           </motion.div>
 
-          {/* Search/Monitor Bar (Interactive center like reference) */}
+          {/* Dual Action CTA (Replaces confusing input box) */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6 }}
-            className="w-full max-w-2xl relative group"
+            className="w-full max-w-3xl flex flex-col md:flex-row items-stretch justify-center gap-4 mt-8"
           >
-            <div className="absolute -inset-1 bg-linear-to-r from-primary/30 to-orange-600/30 rounded-2xl blur-lg opacity-40 group-hover:opacity-60 transition-opacity" />
-            <div className="relative flex items-center p-2 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl">
-              <Search className="ml-4 w-5 h-5 text-white/40" />
-              <input 
-                placeholder="https://cctv-stream.gov/node-0842.m3u8"
-                className="flex-1 bg-transparent border-none outline-none px-4 py-3 font-mono text-sm text-white placeholder:text-white/20"
-              />
-              <Link href="/testing">
-                <Button className="h-12 px-8 rounded-xl font-bold tracking-tight bg-primary hover:bg-primary/90 text-black shadow-lg shadow-primary/20 transition-all active:scale-95 group/btn">
-                  Launch Terminal
-                  <ChevronRight className="ml-2 w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-                </Button>
-              </Link>
-            </div>
+            {/* Action 1: Local Analysis */}
+            <Link href="/testing?mode=file" className="group relative flex-1">
+              <div className="absolute -inset-px bg-linear-to-r from-white/20 to-white/0 rounded-2xl blur-[2px] opacity-20 group-hover:opacity-100 transition-opacity" />
+              <div className="h-full relative flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl hover:bg-white/10 transition-colors cursor-pointer overflow-hidden">
+                <div className="absolute right-0 top-0 bottom-0 w-32 bg-linear-to-l from-white/5 to-transparent skew-x-[-20deg]" />
+                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center shrink-0 border border-white/20">
+                  <MonitorPlay className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex flex-col items-start flex-1 text-left">
+                  <span className="text-white font-bold tracking-tight text-lg">Local Simulation</span>
+                  <span className="text-[10px] uppercase font-mono tracking-widest text-white/40">Upload mp4 dataset</span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-white/30 group-hover:text-white group-hover:translate-x-1 transition-all" />
+              </div>
+            </Link>
+
+            {/* Action 2: Live Node (Primary) */}
+            <Link href="/testing?mode=live" className="group relative flex-1">
+              <div className="absolute -inset-px bg-linear-to-r from-primary to-orange-500 rounded-2xl blur-[2px] opacity-40 group-hover:opacity-80 transition-opacity" />
+              <div className="h-full relative flex items-center gap-4 p-4 rounded-2xl bg-black border border-primary/30 backdrop-blur-xl hover:bg-primary/10 transition-colors cursor-pointer overflow-hidden">
+                <div className="absolute right-0 top-0 bottom-0 w-32 bg-linear-to-l from-primary/10 to-transparent skew-x-[-20deg]" />
+                <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center shrink-0 border border-primary/40 shadow-[0_0_15px_rgba(var(--primary-rgb),0.5)]">
+                  <Wifi className="w-6 h-6 text-primary animate-pulse" />
+                </div>
+                <div className="flex flex-col items-start flex-1 text-left">
+                  <span className="text-primary font-black tracking-tight text-lg">Live Node Uplink</span>
+                  <span className="text-[10px] uppercase font-mono tracking-widest text-primary/60">Connect remote IP / Phone</span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-primary/30 group-hover:text-primary group-hover:translate-x-1 transition-all" />
+              </div>
+            </Link>
           </motion.div>
         </div>
 
@@ -152,7 +169,7 @@ export default function LandingPage() {
               </span>
               <h2 className="text-5xl font-black tracking-tight max-w-xl">Neural Mesh <span className="text-white/30">Infrastructure.</span></h2>
             </div>
-            <div className="flex items-center gap-4 text-[10px] font-mono text-white/40 uppercase tracking-widest md:flex hidden">
+            <div className="items-center gap-4 text-[10px] font-mono text-white/40 uppercase tracking-widest hidden md:flex">
               <div className="flex items-center gap-1.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse transition-shadow shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
                 SYSTEM_NOMINAL
