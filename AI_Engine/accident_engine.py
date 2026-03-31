@@ -258,17 +258,8 @@ class AccidentEngine:
               ACCIDENT_WEIGHTS['speed']*S_norm) * 100
         SS = round(SS, 2)
 
-        # ===== CRITICAL FIX =====
-        # An accident REQUIRES hard physical evidence:
-        #   1. Actual bounding-box collision between vehicles (IoU > 0.3), OR
-        #   2. A sudden-stop event on a vehicle track.
-        # Without either, optical flow + vehicle presence alone is NOT
-        # sufficient — it's just normal driving, camera shake, or animals.
-        has_collision_evidence = collision_detected or any_sudden_stop
-
-        if not has_collision_evidence:
-            # No real collision — clamp to LOW regardless of flow score
-            SS = min(SS, SEVERITY_LOW - 1)
+        # Restored original unprotected logic (friends' code) — allows
+        # optical flow & vehicle presence alone to trigger accidents.
 
         # Severity label
         if SS <= SEVERITY_LOW:

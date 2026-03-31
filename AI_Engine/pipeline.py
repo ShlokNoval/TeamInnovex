@@ -86,25 +86,15 @@ class AIPipeline:
             det['track_id'] = mapped_track_id
             det['velocity_px'] = velocity_px
             
-            # How long has this object been tracked?
-            track_length = len(self.tracker.history.get(t_id_int, [])) if t_id_int != -1 else 0
-            
-            # --- POTHOLE ALIAS ---
+            # --- POTHOLE ALIAS (RESTORED FRIEND'S LOGIC) ---
             # Alias low-confidence, stationary, road-surface objects as potholes.
-            # Guards:
-            #   1. Low confidence — YOLO doesn't know what this is
-            #   2. Velocity < 3.0 px — stationary (raised from 1.5 to handle tracker noise)
-            #   3. Not a known class — don't override real detections
-            #   4. No spatial overlap with any vehicle bbox — prevents vehicle parts being aliased
-            #   5. In lower 50% of frame — road surface zone (tightened from 30% to reduce noise)
-            #   6. Must be tracked for >= 3 frames — prevents 1-frame ghost noise!
+            # This is strictly piped ONLY into the Pothole Engine.
             if (det['confidence'] < 0.26
                     and det['velocity_px'] < 3.0
-                    and track_length >= 3
                     and det['class_name'] not in EXCLUDE_FROM_ALIAS
                     and not overlaps_vehicle(det['bbox'])):
                 x, y, w, h = det['bbox']
-                if y > img_h * 0.50:   # Tightened: bottom 50% only (was 30%)
+                if y > img_h * 0.30:   # Friend's original zone
                     det['class_name'] = 'pothole'
                     det['confidence'] = 0.85
                     det['area_norm'] = 0.7
@@ -113,17 +103,11 @@ class AIPipeline:
             enriched_detections.append(det)
 
         # -----------------------------------------------------------------------
-        # Per-class confidence TRUST thresholds.
-        # YOLO runs at conf=0.05 globally (needed to catch faint road artifacts
-        # for pothole aliasing). BUT at that threshold, the model hallucinates
-        # vehicles, persons and animals in every video. We therefore require a
-        # much higher confidence before treating a detection as a real member of
-        # that class. Ghost detections below these bars are completely ignored by
-        # the accident and animal engines.
+        # ISOLATED ENGINE CONFIDENCE THRESHOLDS (FRIEND'S SENSITIVITY)
         # -----------------------------------------------------------------------
-        VEHICLE_MIN_CONF = 0.40   # Must be very confident it's a vehicle
-        PERSON_MIN_CONF  = 0.40   # Must be very confident it's a person
-        ANIMAL_MIN_CONF  = 0.30   # Slightly lenient for animals
+        VEHICLE_MIN_CONF = 0.40   
+        PERSON_MIN_CONF  = 0.40   
+        ANIMAL_MIN_CONF  = 0.30   
 
         # Trusted-class filtered views — only real, confident detections
         trusted_vehicles = [

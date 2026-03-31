@@ -18,7 +18,7 @@ export function getSeverityColor(severity: SeverityLabel): string {
 
 export function getStatusColor(status: IncidentStatus): string {
   switch (status) {
-    case 'new': return 'bg-blue-500/15 text-blue-700 dark:text-blue-400'
+    case 'new': return 'bg-orange-500/15 text-orange-700 dark:text-orange-400'
     case 'acknowledged': return 'bg-purple-500/15 text-purple-700 dark:text-purple-400'
     case 'resolved': return 'bg-gray-500/15 text-gray-700 dark:text-gray-400 line-through'
     default: return 'bg-gray-100 text-gray-800'

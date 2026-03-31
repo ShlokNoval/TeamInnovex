@@ -1,10 +1,41 @@
-# DivyaDrishti — AI-Powered Road Hazard Detection System
+# DivyaDrishti — Chhatrapati Sambhajinagar (CSN) Smart City Dashboard
+
+![CSN Logo]
+
+**DivyaDrishti** is a state-of-the-art AI-powered road hazard detection and incident management platform, developed in strategic partnership with the **Chhatrapati Sambhajinagar (CSN) Municipal Corporation X Smart City** initiative. 
+
+The system leverages YOLOv8 neural networks to monitor live CCTV feeds, automatically identifying potholes, accidents, and animal hazards to orchestrate real-time emergency responses.
+
+---
+
+## 🌟 Core Features
+
+### 📡 Neural Command Center (SOC)
+- **Real-Time Inference**: Sub-50ms hazard detection using a distributed YOLOv8 pipeline.
+- **Geospatial Intelligence**: Active mapping of hazards on a high-density "Dark Matter" heatmap for precise dispatching.
+- **Live Stream Uplinks**: Secure WebSocket-based frame relay from mobile neural nodes and fixed CCTV infrastructure.
+
+### 📋 Intelligent Incident Management
+- **Advanced Filtering**: Hierarchical data drilling by **Hazard Type**, **Severity (Critical-Low)**, and **Resolution Status**.
+- **Global Search**: Unified header search that synchronizes across all dashboard modules.
+- **Real-Time Alerts**: A functional Notification Center that tracks the latest high-priority detections instantly.
+
+### 📤 Operational Communication (Sharing & Export)
+- **Instant Field Alerts**: Share incident reports directly to field units via **WhatsApp** or **SMS** with pre-formatted mission data.
+- **Data Export**: Bulk export of global logs and **Individual Incident Dossiers** (CSV) for official municipal auditing.
+- **Dossier System**: Detailed single-incident reports including GPS coordinates, confidence scores, and raw AI metadata.
+
+### 🎨 Premium UI/UX
+- **Adaptive Theme Engine**: Fully functional **Light and Dark modes** tailored for 24/7 Security Operations Center (SOC) environments.
+- **Glassmorphic Aesthetic**: A "Military-Grade" interface design using premium typography (Inter/Mono) and sleek micro-animations.
+
+---
 
 ## 🏗️ Architecture
 
 ```
 TeamInnovex/
-├── UI/              ← Next.js 16 Frontend (Neural SOC Dashboard)
+├── UI/              ← Next.js 14+ Frontend (Neural SOC Dashboard)
 ├── Backend/         ← Node.js Express + Socket.io (Relay Server)
 ├── AI_Engine/       ← FastAPI + YOLOv8 Detection Engine
 └── README.md
@@ -35,51 +66,27 @@ npm install
 npm run dev
 ```
 
-### Terminal 4 — Mobile Access (Optional)
-```bash
-ngrok http 3000
-```
-
----
-
-## 🔗 Port Assignments
-
-| Service | Port | Purpose |
-|---------|------|---------|
-| Next.js UI | 3000 | SOC Dashboard + Mobile Stream Page |
-| Node.js Backend | 8000 | REST API + Socket.io Relay |
-| AI Engine | 8001 | YOLOv8 Inference + WebSocket |
-
----
-
-## 📱 Usage
-
-1. **Start all 3 services** (Terminals 1-3 above)
-2. Open `http://localhost:3000` on your PC → Landing page
-3. Open `http://localhost:3000/dashboard` → SOC Command Hub
-4. Open `http://localhost:3000/stream` on your phone (via ngrok URL) → Camera uplink
-5. Tap **LINK TO SOC** → Mobile starts streaming frames
-6. Open `http://localhost:3000/testing?mode=live` on PC → Watch AI-annotated live feed
-7. AI detects hazards → Alerts appear in the dashboard in real-time
-
 ---
 
 ## 🧬 Data Flow
 
-```
-Phone Camera → /stream page → Socket.io raw_frame → Node.js Backend
-  → WebSocket → AI Engine (YOLOv8) → Annotated frame + incidents
-  → Node.js Backend → Socket.io frame_stream + new_alert → SOC Dashboard
-```
+1. **Edge Detections**: Mobile/Fixed cameras stream frames via Socket.io to the Node.js relay.
+2. **AI Inference**: The relay forwards frames to the Python AI Engine; YOLOv8 identifies hazards and calculates risk scores.
+3. **SOC Broadcast**: Annotated frames and structured incident data are broadcasted to the Next.js Command Hub.
+4. **Field Action**: Operators filter, analyze, and dispatch alerts via the integrated WhatsApp/SMS sharing system.
 
 ---
 
-## 🌿 Branch Strategy
+## 🔧 Port Assignments
 
-| Branch | Purpose |
-|---|---|
-| `main` | Stable, demo-ready code |
-| `production-v1` | Full integrated build |
-| `ui-core` | Frontend development |
-| `backend-core` | Legacy backend (deprecated) |
-| `ai-analysis-engine` | AI Engine development |
+| Service | Port | Purpose |
+|---------|------|---------|
+| Next.js UI | 3000 | SOC Dashboard + Branding |
+| Node.js Backend | 8000 | REST API + Socket.io Relay |
+| AI Engine | 8001 | YOLOv8 Inference + JSON Telemetry |
+
+---
+
+## 🏢 Partnership
+Developed for **Chhatrapati Sambhajinagar Municipal Corporation X Smart City**.
+*"Understand every anomaly instantly."*

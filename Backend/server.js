@@ -347,6 +347,20 @@ app.post('/api/incidents', (req, res) => {
     data: data.metadata
   }, location);
 
+  // Directly attach snapshot if the AI engine sent it
+  if (data.annotated_frame) {
+    const snapB64 = data.annotated_frame.startsWith('data:') 
+      ? data.annotated_frame 
+      : `data:image/jpeg;base64,${data.annotated_frame}`;
+    incident.snapshots = [{
+      id: `snap-${uuidv4().slice(0, 6)}`,
+      incident_id: incident.id,
+      image_url: snapB64,
+      frame_type: 'detection',
+      created_at: incident.created_at,
+    }];
+  }
+
   // Use unified alert handler for cooldown and broadcast
   const wasEmitted = handleIncidentAlert(incident);
 

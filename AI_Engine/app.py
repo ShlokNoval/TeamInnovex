@@ -74,17 +74,17 @@ async def websocket_stream(websocket: WebSocket, camera_id: str):
                 # Format image to base64
                 annotated_b64 = pipeline.detector.frame_to_base64(annotated_frame)
                 
-                # Route immediately to backend if any hazard triggers are set to HIGH
+                # Route immediately to backend with embedded snapshot
                 for inc in all_incidents:
-                    if inc['severity'] == 'HIGH':
-                        backend_payload = {
-                            "type": inc['type'],
-                            "camera_id": inc['camera_id'],
-                            "frame_index": inc['frame'],
-                            "severity": "HIGH",
-                            "metadata": inc['data']
-                        }
-                        asyncio.create_task(send_incident_to_backend(backend_payload))
+                    backend_payload = {
+                        "type": inc['type'],
+                        "camera_id": inc['camera_id'],
+                        "frame_index": inc['frame'],
+                        "severity": inc['severity'],
+                        "metadata": inc['data'],
+                        "annotated_frame": annotated_b64
+                    }
+                    asyncio.create_task(send_incident_to_backend(backend_payload))
                 
                 output_payload = {
                     "annotated_frame": annotated_b64,

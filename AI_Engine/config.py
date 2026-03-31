@@ -6,8 +6,8 @@ load_dotenv()
 
 # --- MODEL CONSTANTS ---
 MODEL_PATH = os.getenv('MODEL_PATH', 'yolov8n.pt')
-CONF_THRESHOLD = 0.05        # lowered further to 0.05 to "see" faint road artifacts for pothole aliasing
-CONF_THRESHOLD_NIGHT = 0.05  # relaxed similarly
+CONF_THRESHOLD = 0.05        # Restored friend's high-sensitivity threshold for alias hacking
+CONF_THRESHOLD_NIGHT = 0.05
 NMS_THRESHOLD = 0.45
 
 # --- TRACKING CONSTANTS ---

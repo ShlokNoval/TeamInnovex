@@ -51,18 +51,18 @@ export function DetectionSidebar() {
       </div>
       
       {/* Metrics Row */}
-      <div className="grid grid-cols-3 divide-x divide-white/5 border-b border-white/5 bg-black/40 text-center py-3 text-xs backdrop-blur-sm">
+      <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-200 bg-slate-50 text-center py-4 text-xs">
         <div className="flex flex-col items-center gap-1.5">
-          <span className="text-muted-foreground uppercase text-[9px] tracking-widest">Potholes</span>
-          <span className="font-mono text-lg font-bold text-amber-500">{counts.pothole}</span>
+          <span className="text-slate-400 uppercase text-[9px] font-bold tracking-widest">Potholes</span>
+          <span className="font-mono text-xl font-black text-amber-600">{counts.pothole}</span>
         </div>
         <div className="flex flex-col items-center gap-1.5">
-          <span className="text-muted-foreground uppercase text-[9px] tracking-widest">Animals</span>
-          <span className="font-mono text-lg font-bold text-orange-400">{counts.animal}</span>
+          <span className="text-slate-400 uppercase text-[9px] font-bold tracking-widest">Animals</span>
+          <span className="font-mono text-xl font-black text-orange-600">{counts.animal}</span>
         </div>
         <div className="flex flex-col items-center gap-1.5">
-          <span className="text-muted-foreground uppercase text-[9px] tracking-widest">Accidents</span>
-          <span className="font-mono text-lg font-bold text-red-500">{counts.accident}</span>
+          <span className="text-slate-400 uppercase text-[9px] font-bold tracking-widest">Accidents</span>
+          <span className="font-mono text-xl font-black text-red-600">{counts.accident}</span>
         </div>
       </div>
 
@@ -71,29 +71,29 @@ export function DetectionSidebar() {
           {detections.map((detection, idx) => (
             <div 
               key={idx} 
-              className="flex items-start gap-3 p-3 rounded bg-black/40 border border-white/5 hover:border-primary/30 transition-colors animate-in fade-in slide-in-from-left-4 duration-500 relative overflow-hidden group"
+              className="flex items-start gap-3 p-4 rounded-xl bg-white border border-slate-200 hover:border-orange-300 transition-all shadow-xs hover:shadow-md animate-in fade-in slide-in-from-left-4 duration-500 relative overflow-hidden group"
             >
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary/30 group-hover:bg-primary transition-colors" />
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-orange-200 group-hover:bg-orange-500 transition-colors" />
               
-              <div className="p-2 rounded bg-primary/10 border border-primary/20 shrink-0 text-primary">
+              <div className="p-2.5 rounded-lg bg-orange-50 border border-orange-100 shrink-0 text-orange-600">
                 <HazardIcon type={detection.class as any} className="w-4 h-4" />
               </div>
               
               <div className="flex-1 flex flex-col gap-1.5 min-w-0">
                 <div className="flex justify-between items-center">
-                  <span className="font-mono font-medium text-xs text-white uppercase tracking-wider truncate">
+                  <span className="font-mono font-black text-xs text-slate-900 uppercase tracking-wider truncate">
                     {detection.class}_DETECTED
                   </span>
                   {detection.severity && (
-                    <Badge variant="outline" className={`font-mono text-[9px] px-1.5 py-0 uppercase tracking-widest ${getSeverityColor(detection.severity)}`}>
+                    <Badge variant="outline" className={`font-mono text-[9px] px-1.5 py-0 uppercase tracking-widest border-none ${getSeverityColor(detection.severity)}`}>
                       {detection.severity}
                     </Badge>
                   )}
                 </div>
                 
-                <div className="flex justify-between font-mono text-[10px] text-muted-foreground items-center">
-                  <span className="text-primary/70">CF: {(detection.confidence * 100).toFixed(1)}%</span>
-                  <span className="opacity-50">
+                <div className="flex justify-between font-mono text-[10px] items-center">
+                  <span className="text-orange-700 font-bold">CF: {(detection.confidence * 100).toFixed(1)}%</span>
+                  <span className="text-slate-400 font-medium tracking-tight">
                     BBOX:[{detection.bbox.map(n => n.toFixed(0)).join(',')}]
                   </span>
                 </div>

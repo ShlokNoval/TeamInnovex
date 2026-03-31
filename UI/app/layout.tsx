@@ -31,14 +31,13 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background font-sans antialiased flex flex-col`}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
+          defaultTheme="light"
           enableSystem
           disableTransitionOnChange
         >
           <TooltipProvider>
             {children}
             <Toaster />
-            <CustomCursor />
           </TooltipProvider>
         </ThemeProvider>
       </body>
