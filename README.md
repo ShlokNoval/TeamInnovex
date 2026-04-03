@@ -1,4 +1,4 @@
-# DivyaDrishti — Chhatrapati Sambhajinagar (CSN) Smart City Dashboard
+# DivyaDrishti — Chhatrapati Sambhajinagar (CSN) Smart City Dashboard.
 
 ![CSN Logo]
 
