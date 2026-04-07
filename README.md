@@ -1,7 +1,5 @@
 # DivyaDrishti — Chhatrapati Sambhajinagar (CSN) Smart City Dashboard.
 
-![CSN Logo]
-
 **DivyaDrishti** is a state-of-the-art AI-powered road hazard detection and incident management platform, developed in strategic partnership with the **Chhatrapati Sambhajinagar (CSN) Municipal Corporation X Smart City** initiative. 
 
 The system leverages YOLOv8 neural networks to monitor live CCTV feeds, automatically identifying potholes, accidents, and animal hazards to orchestrate real-time emergency responses.
