@@ -49,15 +49,19 @@ export function VideoUploader({ onUpload }: VideoUploaderProps) {
   }
 
   return (
-    <Card className="border-2 border-dashed border-primary/20 bg-card/50">
-      <CardHeader className="text-center">
-        <CardTitle className="text-xl">Upload Demo Video</CardTitle>
-        <CardDescription>Drag and drop a video or image to start real-time inference</CardDescription>
+    <Card className="border-2 border-dashed border-primary/30 bg-zinc-950/40 backdrop-blur-md transition-all hover:bg-zinc-950/60 group">
+      <CardHeader className="text-center pb-2">
+        <CardTitle className="text-xl font-black italic tracking-tighter uppercase text-white/90">
+          Manual <span className="text-primary">Feed</span> Intake
+        </CardTitle>
+        <CardDescription className="text-[10px] uppercase tracking-widest text-white/30 font-mono">
+          Upload local telemetry for simulation
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <label 
-          className={`flex flex-col items-center justify-center h-64 w-full rounded-lg cursor-pointer transition-colors ${
-            isDragging ? "bg-primary/10 border-primary" : "hover:bg-accent/50"
+          className={`flex flex-col items-center justify-center h-56 w-full rounded-xl cursor-pointer transition-all border-2 border-transparent ${
+            isDragging ? "bg-primary/10 border-primary shadow-[0_0_20px_rgba(var(--primary-rgb),0.1)]" : "hover:bg-primary/5 active:scale-[0.98]"
           }`}
           onDragEnter={handleDrag}
           onDragLeave={handleDrag}
@@ -65,11 +69,13 @@ export function VideoUploader({ onUpload }: VideoUploaderProps) {
           onDrop={handleDrop}
         >
           <div className="flex flex-col items-center justify-center pt-5 pb-6">
-            <UploadCloud className={`w-12 h-12 mb-4 ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
-            <p className="mb-2 text-sm text-muted-foreground">
-              <span className="font-semibold">Click to upload</span> or drag and drop
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4 border border-primary/20 group-hover:scale-110 transition-transform duration-500">
+               <UploadCloud className={`w-8 h-8 ${isDragging ? "text-primary animate-bounce" : "text-primary/60"}`} />
+            </div>
+            <p className="mb-1 text-xs font-bold text-white/60 tracking-wider">
+               <span className="text-primary">ACTIVATE</span> PORT
             </p>
-            <p className="text-xs text-muted-foreground">MP4, AVI, MOV, JPG, PNG (Max 50MB)</p>
+            <p className="text-[8px] text-white/20 font-mono uppercase tracking-[0.2em]">MP4 / AVI / MOV / JPG / PNG</p>
           </div>
           <input
             type="file"
@@ -80,8 +86,8 @@ export function VideoUploader({ onUpload }: VideoUploaderProps) {
         </label>
         
         {error && (
-          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-2 text-sm text-destructive">
-            <AlertCircle className="w-4 h-4" />
+          <div className="mt-4 p-3 bg-red-950/30 border border-red-500/20 rounded-xl flex items-center gap-2 text-[10px] text-red-400 font-mono uppercase tracking-widest">
+            <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
           </div>
         )}

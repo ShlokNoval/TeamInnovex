@@ -18,11 +18,12 @@ function TestingDashboardContent() {
   const [isLive, setIsLive] = useState(initialMode === 'live')
   
   return (
-    <div className="min-h-screen bg-background flex flex-col relative overflow-hidden">
-      {/* Subtle Background Glows */}
-      <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-primary/5 rounded-[100%] blur-[120px] pointer-events-none" />
+    <div className="min-h-screen bg-black flex flex-col relative overflow-hidden dark text-foreground">
+      {/* Subtle Background Glows - Amber theme */}
+      <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-primary/10 rounded-[100%] blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-0 left-1/4 w-[300px] h-[300px] bg-primary/5 rounded-[100%] blur-[100px] pointer-events-none" />
       
-      <header className="border-b bg-card/80 backdrop-blur-md px-6 py-4 flex items-center justify-between z-10 border-white/5">
+      <header className="border-b bg-black/40 backdrop-blur-xl px-6 py-4 flex items-center justify-between z-10 border-white/10 shadow-2xl">
         <div className="flex items-center gap-4">
           <Link href="/">
             <Button variant="ghost" size="icon" className="hover:bg-primary/20 hover:text-primary transition-colors">
@@ -48,9 +49,9 @@ function TestingDashboardContent() {
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden z-10 h-[calc(100vh-76px)]">
         <div className="flex-1 p-4 lg:p-6 flex flex-col gap-4 min-h-0">
           {!videoFile && !isLive ? (
-            <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-6 animate-in zoom-in-95 duration-500">
-              <div className="max-w-md w-full p-1 rounded-2xl bg-linear-to-b from-primary/20 to-transparent">
-                <div className="glass-card rounded-xl p-8 h-full flex flex-col justify-between">
+            <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-8 animate-in zoom-in-95 duration-500">
+              <div className="max-w-md w-full p-px rounded-2xl bg-linear-to-b from-primary/30 to-transparent shadow-2xl shadow-primary/5">
+                <div className="glass-card rounded-xl p-8 h-full flex flex-col justify-between border-white/5">
                   <VideoUploader onUpload={(file) => {
                     setVideoFile(file)
                     setIsLive(false)
@@ -58,18 +59,24 @@ function TestingDashboardContent() {
                 </div>
               </div>
               
-              <div className="text-white/10 font-black text-2xl hidden md:block">OR</div>
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-px h-12 bg-linear-to-b from-transparent to-primary/20" />
+                <div className="text-primary/40 font-black text-xl italic tracking-tighter">OR</div>
+                <div className="w-px h-12 bg-linear-to-t from-transparent to-primary/20" />
+              </div>
 
-              <div className="max-w-md w-full p-1 rounded-2xl bg-linear-to-b from-primary/20 to-transparent">
-                <div className="glass-card rounded-xl p-8 h-full flex flex-col gap-6">
-                  <div className="p-4 bg-primary/10 rounded-2xl border border-primary/20 w-fit">
+              <div className="max-w-md w-full p-px rounded-2xl bg-linear-to-b from-primary/30 to-transparent shadow-2xl shadow-primary/5">
+                <div className="glass-card rounded-xl p-8 h-full flex flex-col gap-6 border-white/5">
+                  <div className="p-4 bg-primary/10 rounded-2xl border border-primary/20 w-fit glow-primary">
                     <MonitorPlay className="w-8 h-8 text-primary" />
                   </div>
-                  <div className="space-y-2">
-                    <h3 className="text-xl font-bold">Remote Node Link</h3>
-                    <p className="text-sm text-white/40 leading-relaxed">
-                      Connect to a distant mobile camera via secure tunnel. 
-                      Requires the <code className="text-primary">/stream</code> route active on the source device.
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-2xl font-black italic tracking-tighter uppercase text-white/90">Remote Node <span className="text-primary">Link</span></h3>
+                      <div className="h-1 w-12 bg-primary mt-1" />
+                    </div>
+                    <p className="text-xs text-white/50 leading-relaxed font-medium uppercase tracking-wide">
+                      Secure uplink to high-altitude mobile sensing units via encrypted tunnel protocol.
                     </p>
                   </div>
                   <Button 
@@ -77,9 +84,9 @@ function TestingDashboardContent() {
                       setVideoFile(null)
                       setIsLive(true)
                     }}
-                    className="w-full h-12 bg-primary hover:bg-primary/90 text-black font-bold rounded-xl shadow-lg shadow-primary/10"
+                    className="w-full h-14 bg-primary hover:bg-primary/80 text-black font-black uppercase tracking-[0.2em] rounded-xl shadow-[0_0_20px_rgba(var(--primary-rgb),0.2)] transition-all active:scale-95"
                   >
-                    IDENTIFY REMOTE NODE
+                    IDENTIFY NODE
                   </Button>
                 </div>
               </div>

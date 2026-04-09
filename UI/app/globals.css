@@ -141,10 +141,13 @@
 
 @layer utilities {
   .glass-card {
-    @apply bg-white border border-slate-200 shadow-sm transition-all;
+    @apply bg-card/60 backdrop-blur-md border border-border/50 shadow-2xl transition-all;
+  }
+  .neural-border {
+    @apply border-primary/30 shadow-[0_0_15px_oklch(var(--primary)/15%)];
   }
   .glow-primary {
-    @apply shadow-[0_0_20px_oklch(0.65_0.20_40/20%)];
+    @apply shadow-[0_0_20px_oklch(0.75_0.15_85/30%)];
   }
   .glow-destructive {
     @apply shadow-[0_0_20px_oklch(0.55_0.20_25/30%)];
